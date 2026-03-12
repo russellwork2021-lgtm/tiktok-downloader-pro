@@ -147,9 +147,6 @@ export default function Home() {
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-gray-900">
             TikTok Downloader <span className="text-blue-600">Russell</span>
           </h1>
-          <p className="text-lg text-gray-600">
-            Descarga videos sin marca de agua directo a tu carpeta de descargas. Pega un enlace de perfil o múltiples enlaces de videos (uno por línea).
-          </p>
         </div>
 
         <div className="bg-white rounded-2xl shadow-xl p-6 md:p-8 mb-8 border border-gray-100">
