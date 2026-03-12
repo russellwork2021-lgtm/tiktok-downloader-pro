@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { ApifyClient } from 'apify-client';
 
 export async function POST(req: Request) {
   try {
@@ -14,87 +13,80 @@ export async function POST(req: Request) {
 
     if (APIFY_TOKEN) {
       try {
-        console.log("Using Apify with token...", APIFY_TOKEN.substring(0, 5) + "...");
-        const client = new ApifyClient({ token: APIFY_TOKEN });
+        console.log("Iniciando HTTP Apify para:", cleanUsername);
         
-        const run = await client.actor("clockworks/tiktok-scraper").call({
+        // Llamar a la API de Apify vía fetch nativo (sin librería externa)
+        const runRes = await fetch(`https://api.apify.com/v2/acts/clockworks~tiktok-scraper/runs?token=${APIFY_TOKEN}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             profiles: [cleanUsername],
-            resultsPerPage: 30,
+            resultsPerPage: 15,
             shouldDownloadVideos: true,
             shouldDownloadCovers: false,
             shouldDownloadSubtitles: false,
             shouldDownloadSlideshowImages: false
+          })
         });
 
-        console.log("Apify run finished:", run.id);
-        const { items } = await client.dataset(run.defaultDatasetId).listItems();
-        console.log("Apify items found:", items.length);
+        const runData = await runRes.json();
+        
+        if (!runRes.ok) {
+           throw new Error(runData.error?.message || 'Failed to start Apify run');
+        }
 
-        if (items.length > 0) {
-          const videos = items
-            .filter(vid => (vid.videoMeta as any)?.downloadAddr || vid.videoUrl)
-            .map((vid: any) => ({
-              id: vid.id,
-              title: vid.text || `Video de @${cleanUsername}`,
-              cover: (vid.videoMeta as any)?.coverUrl || (vid.authorMeta as any)?.avatar,
-              playUrl: (vid.videoMeta as any)?.downloadAddr || vid.videoUrl, // URL sin marca de agua
-              author: cleanUsername
-          }));
+        const runId = runData.data.id;
+        const datasetId = runData.data.defaultDatasetId;
+        
+        console.log("Apify Run iniciado:", runId);
 
-          if (videos.length > 0) {
-            return NextResponse.json({ videos });
+        // Esperar a que el run termine (haciendo polling simple)
+        let status = 'RUNNING';
+        let retries = 0;
+        
+        while (status !== 'SUCCEEDED' && status !== 'FAILED' && retries < 40) { // 40 * 3s = 120s max
+          await new Promise(r => setTimeout(r, 3000));
+          const checkRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_TOKEN}`);
+          const checkData = await checkRes.json();
+          status = checkData.data.status;
+          retries++;
+        }
+
+        if (status === 'SUCCEEDED') {
+          // Extraer la data del dataset
+          const dsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}`);
+          const items = await dsRes.json();
+          console.log("Videos encontrados:", items.length);
+
+          if (items.length > 0) {
+            const videos = items
+              .filter((vid: any) => vid.videoMeta?.downloadAddr || vid.videoUrl)
+              .map((vid: any) => ({
+                id: vid.id,
+                title: vid.text || `Video de @${cleanUsername}`,
+                cover: vid.videoMeta?.coverUrl || vid.authorMeta?.avatar,
+                playUrl: vid.videoMeta?.downloadAddr || vid.videoUrl, // URL limpia
+                author: cleanUsername
+            }));
+
+            if (videos.length > 0) {
+              return NextResponse.json({ videos });
+            }
           }
         }
-      } catch (apifyError) {
-        console.error('Apify scraping failed:', apifyError);
+        
+        return NextResponse.json({ error: 'No se encontraron videos (o la extracción tardó demasiado).' }, { status: 404 });
+
+      } catch (apifyError: any) {
+        console.error('Error HTTP Apify:', apifyError.message);
+        return NextResponse.json({ error: `Error de Extracción: ${apifyError.message}` }, { status: 500 });
       }
     } else {
-      console.log("No APIFY_TOKEN provided. Skipping Apify.");
+       return NextResponse.json({ error: 'El administrador no ha configurado el token de la API (APIFY_TOKEN) en Vercel.' }, { status: 500 });
     }
-
-    // Fallback a TikWM
-    const apiUrl = `https://tikwm.com/api/user/posts?unique_id=${encodeURIComponent(cleanUsername)}&count=15`;
-    
-    const response = await fetch(apiUrl, {
-      method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    });
-
-    const text = await response.text();
-    
-    if (text.includes('Just a moment...') || text.includes('cf-browser-verification') || text.includes('captcha')) {
-      return NextResponse.json({ 
-        error: 'TikTok/Cloudflare ha bloqueado temporalmente la extracción masiva de perfiles de forma gratuita. Por favor, pega los enlaces de los videos individualmente o en bloque.',
-        blocked: true
-      }, { status: 403 });
-    }
-
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch(e) {
-      return NextResponse.json({ error: 'Respuesta inválida de la API' }, { status: 500 });
-    }
-
-    if (data.code !== 0 || !data.data || !data.data.videos) {
-      return NextResponse.json({ error: data.msg || 'No se pudieron obtener los videos del perfil' }, { status: 500 });
-    }
-
-    const videos = data.data.videos.map((vid: any) => ({
-      id: vid.video_id,
-      title: vid.title,
-      cover: vid.cover,
-      playUrl: vid.play,
-      author: cleanUsername
-    }));
-
-    return NextResponse.json({ videos });
 
   } catch (error) {
     console.error('Profile API Error:', error);
-    return NextResponse.json({ error: 'Error al procesar el perfil. Intenta con URLs individuales.' }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno del servidor al procesar tu solicitud.' }, { status: 500 });
   }
 }
