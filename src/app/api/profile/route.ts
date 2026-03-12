@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 import { ApifyClient } from 'apify-client';
 
-const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
-
 export async function POST(req: Request) {
   try {
     const { username } = await req.json();
@@ -12,40 +10,46 @@ export async function POST(req: Request) {
     }
 
     const cleanUsername = username.replace('@', '');
+    const APIFY_TOKEN = process.env.APIFY_TOKEN;
 
-    try {
-      // Intento primario con Apify usando el token proporcionado
-      const client = new ApifyClient({ token: APIFY_TOKEN });
-      
-      const run = await client.actor("clockworks/tiktok-scraper").call({
-          profiles: [cleanUsername],
-          resultsPerPage: 30,
-          shouldDownloadVideos: true, // Esto nos da la URL limpia de descarga
-          shouldDownloadCovers: false,
-          shouldDownloadSubtitles: false,
-          shouldDownloadSlideshowImages: false
-      });
+    if (APIFY_TOKEN) {
+      try {
+        console.log("Using Apify with token...", APIFY_TOKEN.substring(0, 5) + "...");
+        const client = new ApifyClient({ token: APIFY_TOKEN });
+        
+        const run = await client.actor("clockworks/tiktok-scraper").call({
+            profiles: [cleanUsername],
+            resultsPerPage: 30,
+            shouldDownloadVideos: true,
+            shouldDownloadCovers: false,
+            shouldDownloadSubtitles: false,
+            shouldDownloadSlideshowImages: false
+        });
 
-      const { items } = await client.dataset(run.defaultDatasetId).listItems();
+        console.log("Apify run finished:", run.id);
+        const { items } = await client.dataset(run.defaultDatasetId).listItems();
+        console.log("Apify items found:", items.length);
 
-      if (items.length > 0) {
-        const videos = items
-          .filter(vid => (vid.videoMeta as any)?.downloadAddr || vid.videoUrl)
-          .map((vid: any) => ({
-            id: vid.id,
-            title: vid.text || `Video de @${cleanUsername}`,
-            cover: (vid.videoMeta as any)?.coverUrl || (vid.authorMeta as any)?.avatar,
-            playUrl: (vid.videoMeta as any)?.downloadAddr || vid.videoUrl, // URL sin marca de agua
-            author: cleanUsername
-        }));
+        if (items.length > 0) {
+          const videos = items
+            .filter(vid => (vid.videoMeta as any)?.downloadAddr || vid.videoUrl)
+            .map((vid: any) => ({
+              id: vid.id,
+              title: vid.text || `Video de @${cleanUsername}`,
+              cover: (vid.videoMeta as any)?.coverUrl || (vid.authorMeta as any)?.avatar,
+              playUrl: (vid.videoMeta as any)?.downloadAddr || vid.videoUrl, // URL sin marca de agua
+              author: cleanUsername
+          }));
 
-        if (videos.length > 0) {
-          return NextResponse.json({ videos });
+          if (videos.length > 0) {
+            return NextResponse.json({ videos });
+          }
         }
+      } catch (apifyError) {
+        console.error('Apify scraping failed:', apifyError);
       }
-    } catch (apifyError) {
-      console.error('Apify scraping failed:', apifyError);
-      // Fallback a TikWM if Apify fails...
+    } else {
+      console.log("No APIFY_TOKEN provided. Skipping Apify.");
     }
 
     // Fallback a TikWM
