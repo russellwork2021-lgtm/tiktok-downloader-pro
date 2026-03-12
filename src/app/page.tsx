@@ -43,7 +43,11 @@ export default function Home() {
           errors.push(res.data.error || 'Error fetching profile');
         }
       } catch (err: any) {
-        errors.push(err.response?.data?.error || 'Error conectando con el perfil. Intenta pegar directamente los enlaces de los videos uno por línea.');
+        if (err.response?.status === 403) {
+          errors.push('TikTok ha bloqueado la extracción automática de este perfil. Por favor, entra al perfil, copia los enlaces de los videos que quieres y pégalos aquí uno debajo del otro.');
+        } else {
+          errors.push(err.response?.data?.error || 'Error conectando con el perfil. Intenta pegar directamente los enlaces de los videos uno por línea.');
+        }
       }
     } else {
       for (const url of rawUrls) {

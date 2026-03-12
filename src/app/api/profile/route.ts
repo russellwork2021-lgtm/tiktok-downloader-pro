@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 
     const text = await response.text();
     
-    if (text.includes('Just a moment...') || text.includes('cf-browser-verification')) {
+    if (text.includes('Just a moment...') || text.includes('cf-browser-verification') || text.includes('captcha')) {
       return NextResponse.json({ 
         error: 'TikTok/Cloudflare ha bloqueado temporalmente la extracción masiva de perfiles de forma gratuita. Por favor, pega los enlaces de los videos individualmente o en bloque.',
         blocked: true
