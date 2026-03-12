@@ -15,6 +15,9 @@ export default function Home() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [downloadedCount, setDownloadedCount] = useState(0);
+
+  const [isProfileExtraction, setIsProfileExtraction] = useState(false);
 
   const extractVideos = async () => {
     setError(null);
@@ -34,6 +37,7 @@ export default function Home() {
     const errors = [];
 
     if (rawUrls.length === 1 && rawUrls[0].includes('@') && !rawUrls[0].includes('/video/')) {
+      setIsProfileExtraction(true);
       try {
         const username = rawUrls[0].split('@')[1].split('?')[0].split('/')[0];
         const res = await axios.post('/api/profile', { username });
@@ -49,7 +53,9 @@ export default function Home() {
           errors.push(err.response?.data?.error || 'Error conectando con el perfil. Intenta pegar directamente los enlaces de los videos uno por línea.');
         }
       }
+      setIsProfileExtraction(false);
     } else {
+      setIsProfileExtraction(false);
       for (const url of rawUrls) {
         try {
           const res = await axios.post('/api/video', { url });
@@ -94,6 +100,7 @@ export default function Home() {
     if (selectedIds.size === 0) return;
     setDownloading(true);
     setProgress(0);
+    setDownloadedCount(0);
 
     const selectedVideos = videos.filter(v => selectedIds.has(v.id));
 
@@ -103,6 +110,8 @@ export default function Home() {
         const res = await fetch(vid.playUrl);
         const blob = await res.blob();
         saveAs(blob, `tiktok_${vid.id}.mp4`);
+        setProgress(100);
+        setDownloadedCount(1);
       } else {
         const zip = new JSZip();
         
@@ -116,6 +125,7 @@ export default function Home() {
             console.error('Error downloading video inside zip', e);
           }
           setProgress(Math.round(((i + 1) / selectedVideos.length) * 100));
+          setDownloadedCount(i + 1);
         }
 
         const zipBlob = await zip.generateAsync({ type: 'blob' });
@@ -126,6 +136,7 @@ export default function Home() {
     } finally {
       setDownloading(false);
       setProgress(0);
+      setDownloadedCount(0);
     }
   };
 
@@ -134,7 +145,7 @@ export default function Home() {
       <main className="max-w-4xl mx-auto px-4 py-12">
         <div className="text-center mb-10">
           <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 text-gray-900">
-            TikTok Downloader <span className="text-blue-600">Pro</span>
+            TikTok Downloader <span className="text-blue-600">Russell</span>
           </h1>
           <p className="text-lg text-gray-600">
             Descarga videos sin marca de agua directo a tu carpeta de descargas. Pega un enlace de perfil o múltiples enlaces de videos (uno por línea).
@@ -156,7 +167,7 @@ export default function Home() {
             className="mt-4 w-full bg-gray-900 hover:bg-gray-800 disabled:bg-gray-400 text-white font-semibold py-3 px-8 rounded-xl transition-colors flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Video className="w-5 h-5" />}
-            {loading ? 'Extrayendo videos...' : 'Extraer Videos'}
+            {loading ? (isProfileExtraction ? 'Analizando perfil de TikTok, esto puede tomar 30 segundos...' : 'Extrayendo videos...') : 'Extraer Videos'}
           </button>
 
           {error && (
@@ -214,32 +225,46 @@ export default function Home() {
 
       {selectedIds.size > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.1)] p-4 md:p-6 z-50 transform transition-transform">
-          <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="text-center sm:text-left">
-              <p className="font-bold text-lg text-gray-900">{selectedIds.size} video{selectedIds.size > 1 ? 's' : ''} seleccionado{selectedIds.size > 1 ? 's' : ''}</p>
-              <p className="text-sm text-gray-500 font-medium">
-                {selectedIds.size === 1 
-                  ? 'Se guardará directo en tu carpeta de Descargas (.mp4)'
-                  : 'Se empaquetará en un solo archivo directo a Descargas (.zip)'}
-              </p>
+          <div className="max-w-4xl mx-auto">
+            {downloading && selectedIds.size > 1 && (
+              <div className="mb-4">
+                <div className="flex justify-between text-sm font-medium text-gray-700 mb-1">
+                  <span>Descargando y empaquetando videos...</span>
+                  <span>{downloadedCount} de {selectedIds.size} ({progress}%)</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                  <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
+                </div>
+              </div>
+            )}
+            
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-center sm:text-left">
+                <p className="font-bold text-lg text-gray-900">{selectedIds.size} video{selectedIds.size > 1 ? 's' : ''} seleccionado{selectedIds.size > 1 ? 's' : ''}</p>
+                <p className="text-sm text-gray-500 font-medium">
+                  {selectedIds.size === 1 
+                    ? 'Se guardará directo en tu carpeta de Descargas (.mp4)'
+                    : 'Se empaquetará en un solo archivo directo a Descargas (.zip)'}
+                </p>
+              </div>
+              <button
+                onClick={handleDownload}
+                disabled={downloading}
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2"
+              >
+                {downloading ? (
+                  <>
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    {selectedIds.size === 1 ? 'Descargando...' : 'Procesando ZIP...'}
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-5 h-5" />
+                    Descargar {selectedIds.size === 1 ? 'Video' : 'en ZIP'}
+                  </>
+                )}
+              </button>
             </div>
-            <button
-              onClick={handleDownload}
-              disabled={downloading}
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all flex items-center justify-center gap-2"
-            >
-              {downloading ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" />
-                  Descargando... {progress}%
-                </>
-              ) : (
-                <>
-                  <Download className="w-5 h-5" />
-                  Descargar {selectedIds.size === 1 ? 'Video' : 'en ZIP'}
-                </>
-              )}
-            </button>
           </div>
         </div>
       )}
