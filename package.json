@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@bochilteam/scraper-tiktok": "^5.0.0",
+    "apify-client": "^2.22.2",
     "axios": "^1.13.6",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",

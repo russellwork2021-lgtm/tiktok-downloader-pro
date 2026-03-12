@@ -1,4 +1,7 @@
 import { NextResponse } from 'next/server';
+import { ApifyClient } from 'apify-client';
+
+const APIFY_TOKEN = process.env.APIFY_TOKEN || '';
 
 export async function POST(req: Request) {
   try {
@@ -8,9 +11,45 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Username is required' }, { status: 400 });
     }
 
-    // TikWM's profile endpoint sometimes gets blocked by Cloudflare (Just a moment...)
-    // We try to fetch it, but gracefully handle the block by informing the user
-    const apiUrl = `https://tikwm.com/api/user/posts?unique_id=${encodeURIComponent(username.replace('@', ''))}&count=15`;
+    const cleanUsername = username.replace('@', '');
+
+    try {
+      // Intento primario con Apify usando el token proporcionado
+      const client = new ApifyClient({ token: APIFY_TOKEN });
+      
+      const run = await client.actor("clockworks/tiktok-scraper").call({
+          profiles: [cleanUsername],
+          resultsPerPage: 30,
+          shouldDownloadVideos: true, // Esto nos da la URL limpia de descarga
+          shouldDownloadCovers: false,
+          shouldDownloadSubtitles: false,
+          shouldDownloadSlideshowImages: false
+      });
+
+      const { items } = await client.dataset(run.defaultDatasetId).listItems();
+
+      if (items.length > 0) {
+        const videos = items
+          .filter(vid => (vid.videoMeta as any)?.downloadAddr || vid.videoUrl)
+          .map((vid: any) => ({
+            id: vid.id,
+            title: vid.text || `Video de @${cleanUsername}`,
+            cover: (vid.videoMeta as any)?.coverUrl || (vid.authorMeta as any)?.avatar,
+            playUrl: (vid.videoMeta as any)?.downloadAddr || vid.videoUrl, // URL sin marca de agua
+            author: cleanUsername
+        }));
+
+        if (videos.length > 0) {
+          return NextResponse.json({ videos });
+        }
+      }
+    } catch (apifyError) {
+      console.error('Apify scraping failed:', apifyError);
+      // Fallback a TikWM if Apify fails...
+    }
+
+    // Fallback a TikWM
+    const apiUrl = `https://tikwm.com/api/user/posts?unique_id=${encodeURIComponent(cleanUsername)}&count=15`;
     
     const response = await fetch(apiUrl, {
       method: 'GET',
@@ -45,7 +84,7 @@ export async function POST(req: Request) {
       title: vid.title,
       cover: vid.cover,
       playUrl: vid.play,
-      author: username
+      author: cleanUsername
     }));
 
     return NextResponse.json({ videos });
