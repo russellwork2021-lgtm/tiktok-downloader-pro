@@ -15,17 +15,12 @@ export async function POST(req: Request) {
       try {
         console.log("Iniciando HTTP Apify para:", cleanUsername);
         
-        const allVideos: any[] = [];
-        const cursor = null;
-        
-        // Primera llamada para obtener la cantidad total de videos
-        const firstRunRes = await fetch(`https://api.apify.com/v2/acts/clockworks~tiktok-scraper/runs?token=${APIFY_TOKEN}`, {
+        const runRes = await fetch(`https://api.apify.com/v2/acts/clockworks~tiktok-scraper/runs?token=${APIFY_TOKEN}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             profiles: [cleanUsername],
-            resultsType: 'posts',
-            limit: 100,
+            resultsPerPage: 700,
             shouldDownloadVideos: false,
             shouldDownloadCovers: false,
             shouldDownloadSubtitles: false,
@@ -33,18 +28,17 @@ export async function POST(req: Request) {
           })
         });
 
-        const firstRunData = await firstRunRes.json();
+        const runData = await runRes.json();
         
-        if (!firstRunRes.ok) {
-           throw new Error(firstRunData.error?.message || 'Failed to start Apify run');
+        if (!runRes.ok) {
+           throw new Error(runData.error?.message || 'Failed to start Apify run');
         }
 
-        let runId = firstRunData.data.id;
-        let datasetId = firstRunData.data.defaultDatasetId;
+        const runId = runData.data.id;
+        const datasetId = runData.data.defaultDatasetId;
         
         console.log("Apify Run iniciado:", runId);
 
-        // Esperar a que el run termine
         let status = 'RUNNING';
         let retries = 0;
         
@@ -57,97 +51,29 @@ export async function POST(req: Request) {
           console.log("Estado del run:", status, "- Intento:", retries);
         }
 
-        if (status !== 'SUCCEEDED') {
-          return NextResponse.json({ error: 'La extracción tardó demasiado. Intenta de nuevo.' }, { status: 408 });
-        }
+        if (status === 'SUCCEEDED') {
+          const dsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}&clean=true`);
+          const items = await dsRes.json();
+          console.log("Videos encontrados:", items.length);
 
-        // Obtener todos los items del dataset
-        const dsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}&clean=true`);
-        const items = await dsRes.json();
-        console.log("Videos encontrados en primera página:", items.length);
+          if (items.length > 0) {
+            const videos = items
+              .filter((vid: any) => vid.videoMeta?.downloadAddr || vid.videoUrl)
+              .map((vid: any) => ({
+                id: vid.id,
+                title: vid.text || `Video de @${cleanUsername}`,
+                cover: vid.videoMeta?.coverUrl || vid.authorMeta?.avatar,
+                playUrl: vid.videoMeta?.downloadAddr || vid.videoUrl,
+                author: cleanUsername
+            }));
 
-        if (items.length > 0) {
-          allVideos.push(...items);
-          
-          // Si hay más videos, hacer llamadas adicionales usando cursor
-          let hasMore = items.length === 100;
-          let page = 1;
-          
-          while (hasMore) {
-            page++;
-            console.log(`Obteniendo página ${page}...`);
-            
-            const nextRunRes = await fetch(`https://api.apify.com/v2/acts/clockworks~tiktok-scraper/runs?token=${APIFY_TOKEN}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                profiles: [cleanUsername],
-                resultsType: 'posts',
-                limit: 100,
-                shouldDownloadVideos: false,
-                shouldDownloadCovers: false,
-                shouldDownloadSubtitles: false,
-                shouldDownloadSlideshowImages: false
-              })
-            });
-
-            const nextRunData = await nextRunRes.json();
-            
-            if (!nextRunRes.ok) {
-              console.error("Error en página adicional:", nextRunData.error?.message);
-              break;
+            if (videos.length > 0) {
+              return NextResponse.json({ videos, total: videos.length });
             }
-
-            runId = nextRunData.data.id;
-            
-            // Esperar este run
-            status = 'RUNNING';
-            retries = 0;
-            
-            while (status !== 'SUCCEEDED' && status !== 'FAILED' && retries < 60) {
-              await new Promise(r => setTimeout(r, 3000));
-              const checkRes = await fetch(`https://api.apify.com/v2/actor-runs/${runId}?token=${APIFY_TOKEN}`);
-              const checkData = await checkRes.json();
-              status = checkData.data.status;
-              retries++;
-            }
-
-            if (status === 'SUCCEEDED') {
-              datasetId = nextRunData.data.defaultDatasetId;
-              const nextDsRes = await fetch(`https://api.apify.com/v2/datasets/${datasetId}/items?token=${APIFY_TOKEN}&clean=true`);
-              const nextItems = await nextDsRes.json();
-              
-              if (nextItems.length > 0) {
-                allVideos.push(...nextItems);
-                hasMore = nextItems.length === 100;
-              } else {
-                hasMore = false;
-              }
-            } else {
-              hasMore = false;
-            }
-          }
-        }
-
-        console.log("Total de videos extraídos:", allVideos.length);
-
-        if (allVideos.length > 0) {
-          const videos = allVideos
-            .filter((vid: any) => vid.videoMeta?.downloadAddr || vid.videoUrl)
-            .map((vid: any) => ({
-              id: vid.id,
-              title: vid.text || `Video de @${cleanUsername}`,
-              cover: vid.videoMeta?.coverUrl || vid.authorMeta?.avatar,
-              playUrl: vid.videoMeta?.downloadAddr || vid.videoUrl,
-              author: cleanUsername
-          }));
-
-          if (videos.length > 0) {
-            return NextResponse.json({ videos, total: videos.length });
           }
         }
         
-        return NextResponse.json({ error: 'No se encontraron videos para este perfil.' }, { status: 404 });
+        return NextResponse.json({ error: 'No se encontraron videos para este perfil. El perfil puede ser privado o no existir.' }, { status: 404 });
 
       } catch (apifyError: any) {
         console.error('Error HTTP Apify:', apifyError.message);
