@@ -16,6 +16,7 @@ export default function Home() {
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [downloadedCount, setDownloadedCount] = useState(0);
+  const [totalVideos, setTotalVideos] = useState<number | null>(null);
 
   const [isProfileExtraction, setIsProfileExtraction] = useState(false);
 
@@ -58,6 +59,7 @@ export default function Home() {
         const res = await axios.post('/api/profile', { username });
         if (res.data.videos) {
           fetchedVideos.push(...res.data.videos);
+          if (res.data.total) setTotalVideos(res.data.total);
         } else {
           errors.push(res.data.error || 'Error fetching profile');
         }
@@ -235,7 +237,7 @@ export default function Home() {
                 </div>
                 <div>
                   <h2 className="text-xl font-black">Resultados</h2>
-                  <p className="text-sm text-slate-500 font-medium">{videos.length} videos encontrados</p>
+                  <p className="text-sm text-slate-500 font-medium">{videos.length} videos encontrados {totalVideos && totalVideos !== videos.length && `(total perfil: ${totalVideos})`}</p>
                 </div>
               </div>
               <button
