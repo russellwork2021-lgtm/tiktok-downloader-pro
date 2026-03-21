@@ -84,7 +84,7 @@ export async function POST(req: Request) {
                 profiles: [cleanUsername],
                 resultsType: 'posts',
                 limit: 100,
-                customMapFunction: (item) => { return item; },
+                customMapFunction: (item: any) => { return item; },
                 shouldDownloadVideos: false,
                 shouldDownloadCovers: false,
                 shouldDownloadSubtitles: false,
