@@ -21,7 +21,7 @@ export async function POST(req: Request) {
           body: JSON.stringify({
             profiles: [cleanUsername],
             resultsPerPage: 700,
-            shouldDownloadVideos: false,
+            shouldDownloadVideos: true,
             shouldDownloadCovers: false,
             shouldDownloadSubtitles: false,
             shouldDownloadSlideshowImages: false
