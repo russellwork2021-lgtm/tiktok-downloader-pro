@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import axios from 'axios';
-import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import { 
   Download, 
@@ -170,29 +169,20 @@ export default function Home() {
         const vid = selectedVideos[0];
         const res = await fetch(vid.playUrl);
         const blob = await res.blob();
-        const ext = vid.platform === 'tiktok' ? 'mp4' : 'mp4';
-        saveAs(blob, `${vid.platform}_${vid.id.substring(0, 8)}.${ext}`);
+        saveAs(blob, `${vid.platform}_${vid.id.substring(0, 8)}.mp4`);
         setProgress(100);
         setDownloadedCount(1);
       } else {
-        const zip = new JSZip();
+        setProgress(20);
+        const res = await axios.post('/api/download', {
+          videos: selectedVideos
+        }, {
+          responseType: 'blob'
+        });
         
-        for (let i = 0; i < selectedVideos.length; i++) {
-          const vid = selectedVideos[i];
-          try {
-            const res = await fetch(vid.playUrl);
-            const blob = await res.blob();
-            const ext = vid.platform === 'tiktok' ? 'mp4' : 'mp4';
-            zip.file(`${vid.platform}_${vid.id.substring(0, 8)}.${ext}`, blob);
-          } catch(e) {
-            console.error('Error downloading video inside zip', e);
-          }
-          setProgress(Math.round(((i + 1) / selectedVideos.length) * 100));
-          setDownloadedCount(i + 1);
-        }
-
-        const zipBlob = await zip.generateAsync({ type: 'blob' });
-        saveAs(zipBlob, `videos_${new Date().getTime()}.zip`);
+        setProgress(100);
+        saveAs(new Blob([res.data]), `videos_${new Date().getTime()}.zip`);
+        setDownloadedCount(selectedVideos.length);
       }
       } catch {
       setError('Hubo un error al descargar. Es posible que el video sea demasiado grande o haya un problema de red.');
