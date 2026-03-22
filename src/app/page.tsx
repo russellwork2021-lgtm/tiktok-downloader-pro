@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import axios from 'axios';
-import { saveAs } from 'file-saver';
 import { 
   Download, 
   Loader2, 
@@ -165,31 +164,29 @@ export default function Home() {
     const selectedVideos = videos.filter(v => selectedIds.has(v.id));
 
     try {
-      if (selectedVideos.length === 1) {
-        const vid = selectedVideos[0];
-        const res = await fetch(vid.playUrl);
-        const blob = await res.blob();
-        saveAs(blob, `${vid.platform}_${vid.id.substring(0, 8)}.mp4`);
-        setProgress(100);
-        setDownloadedCount(1);
-      } else {
-        setProgress(20);
-        const res = await axios.post('/api/download', {
-          videos: selectedVideos
-        }, {
-          responseType: 'blob'
-        });
+      for (let i = 0; i < selectedVideos.length; i++) {
+        const vid = selectedVideos[i];
+        const filename = `${vid.platform}_${vid.id.substring(0, 8)}.mp4`;
+        const link = document.createElement('a');
+        link.href = vid.playUrl;
+        link.download = filename;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         
-        setProgress(100);
-        saveAs(new Blob([res.data]), `videos_${new Date().getTime()}.zip`);
-        setDownloadedCount(selectedVideos.length);
+        setDownloadedCount(i + 1);
+        setProgress(Math.round(((i + 1) / selectedVideos.length) * 100));
+        
+        if (i < selectedVideos.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
       }
-      } catch {
-      setError('Hubo un error al descargar. Es posible que el video sea demasiado grande o haya un problema de red.');
+    } catch (err) {
+      setError('Error al descargar los videos.');
     } finally {
       setDownloading(false);
       setProgress(0);
-      setDownloadedCount(0);
     }
   };
 
