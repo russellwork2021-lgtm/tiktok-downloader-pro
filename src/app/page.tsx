@@ -191,17 +191,17 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 text-slate-900 pb-32 selection:bg-blue-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950 text-white pb-32 selection:bg-purple-300">
       <main className="max-w-5xl mx-auto px-4 py-12">
         <div className="text-center mb-12 space-y-4">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-pink-50 via-purple-50 to-blue-50 text-purple-600 text-sm font-semibold mb-2">
             <Sparkles className="w-4 h-4" />
             <span>Descarga videos sin marca de agua</span>
           </div>
-          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-slate-900">
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white">
             Social <span className="bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500 bg-clip-text text-transparent">Media</span> Downloader
           </h1>
-          <p className="text-slate-500 font-medium max-w-xl mx-auto">
+          <p className="text-slate-300 font-medium max-w-xl mx-auto">
             Descarga videos de TikTok, Instagram y Facebook de forma rápida y sin marcas de agua.
           </p>
         </div>
