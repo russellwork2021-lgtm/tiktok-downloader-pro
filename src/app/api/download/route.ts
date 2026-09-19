@@ -13,6 +13,14 @@ function generateId(): string {
   return Date.now().toString(36) + Math.random().toString(36).substr(2);
 }
 
+function normalizeMediaUrl(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.find((item): item is string => typeof item === 'string' && item.length > 0) || '';
+  }
+
+  return typeof value === 'string' ? value : '';
+}
+
 export async function POST(req: Request) {
   try {
     const { url } = await req.json();
@@ -41,7 +49,7 @@ export async function POST(req: Request) {
         platform: 'tiktok',
         title: data.title || 'Video de TikTok',
         cover: data.thumbnail || '',
-        playUrl: data.video || '',
+        playUrl: normalizeMediaUrl(data.video),
         author: 'tiktok_user',
         duration: 0
       };
@@ -56,7 +64,7 @@ export async function POST(req: Request) {
         platform: 'instagram',
         title: `Post de Instagram ${new Date().toLocaleDateString()}`,
         cover: media?.thumbnail || '',
-        playUrl: media?.url || '',
+        playUrl: normalizeMediaUrl(media?.url),
         author: 'instagram_user',
         duration: 0
       };
@@ -70,7 +78,7 @@ export async function POST(req: Request) {
         platform: 'facebook',
         title: `Video de Facebook ${new Date().toLocaleDateString()}`,
         cover: '',
-        playUrl: data.HD || data.Normal_video || '',
+        playUrl: normalizeMediaUrl(data.HD || data.Normal_video),
         author: 'facebook_user',
         duration: 0
       };

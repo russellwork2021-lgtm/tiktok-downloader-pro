@@ -44,11 +44,13 @@ async function getFfmpeg() {
       await ffmpeg.load({
         coreURL: await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm'),
-        workerURL: await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.worker.js`, 'text/javascript'),
       });
 
       return ffmpeg;
-    })();
+    })().catch((error) => {
+      ffmpegPromise = null;
+      throw error;
+    });
   }
 
   return ffmpegPromise;
@@ -94,10 +96,17 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
 
   onProgress?.(0.02);
   let response: Response;
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 30_000);
   try {
-    response = await fetch(sourceUrl, { mode: 'cors' });
-  } catch {
+    response = await fetch(sourceUrl, { mode: 'cors', signal: controller.signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('El proveedor tardó demasiado en responder. Prueba con otro video.');
+    }
     throw new Error('Este enlace no permite edición directa desde el navegador. Prueba con otro video o descarga el original.');
+  } finally {
+    window.clearTimeout(timeoutId);
   }
   if (!response.ok) {
     throw new Error('El proveedor no permitió leer el video para editarlo.');
