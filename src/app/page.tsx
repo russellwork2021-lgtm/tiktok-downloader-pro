@@ -211,7 +211,14 @@ export default function Home() {
         setDownloadedCount(i + 1);
       }
     } catch (downloadError) {
-      setError(downloadError instanceof Error ? downloadError.message : 'Error al procesar el video.');
+      const message = downloadError instanceof Error
+        ? downloadError.message
+        : typeof downloadError === 'string'
+          ? downloadError
+          : downloadError && typeof downloadError === 'object' && 'message' in downloadError
+            ? String(downloadError.message)
+            : 'Error al procesar el video.';
+      setError(message || 'Error al procesar el video.');
     } finally {
       setDownloading(false);
       setProgress(0);
