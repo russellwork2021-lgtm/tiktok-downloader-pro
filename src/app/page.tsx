@@ -12,14 +12,11 @@ import {
   Download,
   Facebook,
   Instagram,
-  Layers3,
   Link2,
   Loader2,
   Play,
-  ShieldCheck,
   Sparkles,
   Trash2,
-  Zap,
 } from 'lucide-react';
 
 type Platform = 'tiktok' | 'instagram' | 'facebook';
@@ -57,12 +54,6 @@ const platformColors: Record<Platform, string> = {
   instagram: 'bg-gradient-to-r from-purple-500 via-pink-500 to-orange-500',
   facebook: 'bg-blue-600',
 };
-
-const featureCards = [
-  { icon: Zap, label: 'Extracción rápida', detail: 'Enlaces directos' },
-  { icon: Layers3, label: 'Modo batch', detail: 'Varios enlaces' },
-  { icon: ShieldCheck, label: 'Flujo simple', detail: 'Sin registro' },
-];
 
 export default function Home() {
   const [urls, setUrls] = useState('');
@@ -234,22 +225,22 @@ export default function Home() {
       </header>
 
       <main id="top" className="relative z-10 mx-auto max-w-7xl px-5 pb-40 pt-12 lg:px-8 lg:pt-20">
-        <section className="grid items-end gap-10 lg:grid-cols-[1.15fr_0.85fr] lg:gap-16">
-          <div>
+        <section className="mx-auto max-w-5xl text-center">
+          <div className="mx-auto">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-300/20 bg-violet-300/[0.08] px-3.5 py-2 text-xs font-semibold tracking-[0.14em] text-violet-200 uppercase">
               <Sparkles className="h-3.5 w-3.5 text-fuchsia-300" />
               Tu contenido, a tu ritmo
             </div>
-            <h1 className="max-w-4xl text-5xl font-black leading-[0.98] tracking-[-0.055em] text-white sm:text-6xl lg:text-8xl">
+            <h1 className="mx-auto max-w-4xl text-5xl font-black leading-[0.98] tracking-[-0.055em] text-white sm:text-6xl lg:text-8xl">
               Descarga.
               <span className="block bg-gradient-to-r from-fuchsia-300 via-violet-300 to-cyan-300 bg-clip-text text-transparent">Guarda.</span>
               <span className="block text-white/90">Repite.</span>
             </h1>
-            <p className="mt-7 max-w-2xl text-base leading-7 text-white/55 sm:text-lg">
+            <p className="mx-auto mt-7 max-w-2xl text-base leading-7 text-white/55 sm:text-lg">
               Un espacio limpio para convertir enlaces de TikTok, Instagram y Facebook en descargas directas, sin pasos innecesarios.
             </p>
 
-            <div className="mt-9 grid max-w-xl grid-cols-3 gap-3 border-t border-white/10 pt-5">
+            <div className="mx-auto mt-9 grid max-w-xl grid-cols-3 gap-3 border-t border-white/10 pt-5 text-left">
               <div>
                 <p className="text-2xl font-black tracking-tight text-white">03</p>
                 <p className="mt-1 text-[10px] font-semibold tracking-[0.16em] text-white/35 uppercase">Plataformas</p>
@@ -265,38 +256,10 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.045] p-6 shadow-2xl shadow-black/20 backdrop-blur-xl sm:p-8">
-            <div className="absolute -right-16 -top-16 h-44 w-44 rounded-full bg-violet-500/20 blur-3xl" />
-            <div className="relative">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold tracking-[0.2em] text-white/35 uppercase">Workspace status</span>
-                <span className="rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold tracking-[0.16em] text-white/45 uppercase">Live</span>
-              </div>
-              <div className="mt-9 flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500/30 to-cyan-400/20 ring-1 ring-white/10">
-                  <Download className="h-6 w-6 text-cyan-200" />
-                </div>
-                <div>
-                  <p className="text-lg font-bold text-white">Listo para extraer</p>
-                  <p className="mt-1 text-sm text-white/45">Pega tus enlaces para comenzar</p>
-                </div>
-              </div>
-              <div className="mt-9 space-y-3">
-                {['Analiza el enlace', 'Prepara la descarga', 'Guarda el contenido'].map((step, index) => (
-                  <div key={step} className="flex items-center gap-3 text-sm text-white/65">
-                    <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${index === 0 ? 'bg-violet-400 text-slate-950' : 'border border-white/10 bg-white/[0.04] text-white/30'}`}>
-                      {index === 0 ? <Check className="h-3.5 w-3.5" /> : index + 1}
-                    </span>
-                    {step}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
         </section>
 
-        <section id="workspace" className="mt-16 grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:gap-8">
-          <div className="overflow-hidden rounded-[2rem] border border-white/10 bg-[#111522]/90 shadow-2xl shadow-black/25 backdrop-blur-xl">
+        <section id="workspace" className="mt-16">
+          <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#111522]/90 shadow-2xl shadow-black/25 backdrop-blur-xl">
             <div className="border-b border-white/[0.08] px-6 py-6 sm:px-8">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -384,33 +347,6 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-col gap-4">
-            <div className="rounded-[2rem] border border-white/10 bg-white/[0.045] p-6 backdrop-blur-xl sm:p-7">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] font-bold tracking-[0.2em] text-white/35 uppercase">Why it works</p>
-                <Sparkles className="h-4 w-4 text-fuchsia-300" />
-              </div>
-              <h3 className="mt-5 max-w-sm text-2xl font-bold leading-tight tracking-tight text-white">Menos ruido. Más control sobre tus descargas.</h3>
-              <p className="mt-3 text-sm leading-6 text-white/45">Un flujo pensado para pasar de un enlace a un archivo listo en pocos pasos.</p>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-1">
-              {featureCards.map((feature) => {
-                const Icon = feature.icon;
-                return (
-                  <div key={feature.label} className="flex items-center gap-4 rounded-2xl border border-white/[0.08] bg-white/[0.035] px-4 py-4 transition hover:border-white/15 hover:bg-white/[0.06]">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-200 ring-1 ring-violet-300/10">
-                      <Icon className="h-4.5 w-4.5" />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-bold text-white/85">{feature.label}</span>
-                      <span className="mt-1 block text-xs text-white/35">{feature.detail}</span>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
         </section>
 
         {videos.length > 0 && (
