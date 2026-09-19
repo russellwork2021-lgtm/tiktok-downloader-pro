@@ -12,7 +12,6 @@ import {
   Download,
   Facebook,
   Instagram,
-  Link2,
   Loader2,
   Play,
   Sparkles,
@@ -269,9 +268,6 @@ export default function Home() {
                   </div>
                   <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Pega tus enlaces</h2>
                   <p className="mt-2 text-sm leading-6 text-white/45">Uno o varios enlaces separados por coma o salto de línea.</p>
-                </div>
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-white/40">
-                  <Link2 className="h-5 w-5" />
                 </div>
               </div>
 
