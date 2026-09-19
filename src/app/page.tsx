@@ -206,7 +206,7 @@ export default function Home() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 
         setDownloadedCount(i + 1);
       }
