@@ -35,16 +35,14 @@ function getArrayBuffer(data: Uint8Array): ArrayBuffer {
 async function getFfmpeg() {
   if (!ffmpegPromise) {
     ffmpegPromise = (async () => {
-      const [{ FFmpeg }, { toBlobURL }] = await Promise.all([
-        import('@ffmpeg/ffmpeg'),
-        import('@ffmpeg/util'),
-      ]);
+      const [{ FFmpeg }] = await Promise.all([import('@ffmpeg/ffmpeg')]);
       const ffmpeg = new FFmpeg();
 
-      await ffmpeg.load({
-        coreURL: await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${CORE_BASE_URL}/ffmpeg-core.wasm`, 'application/wasm'),
+      const loadPromise = ffmpeg.load({
+        coreURL: `${CORE_BASE_URL}/ffmpeg-core.js`,
+        wasmURL: `${CORE_BASE_URL}/ffmpeg-core.wasm`,
       });
+      await withTimeout(loadPromise, 60_000, 'FFmpeg tardó demasiado en iniciar. Recarga la página e inténtalo de nuevo.');
 
       return ffmpeg;
     })().catch((error) => {
@@ -54,6 +52,21 @@ async function getFfmpeg() {
   }
 
   return ffmpegPromise;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId !== undefined) {
+      window.clearTimeout(timeoutId);
+    }
+  }
 }
 
 async function getVideoDuration(data: Uint8Array): Promise<number> {
@@ -144,7 +157,7 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
   await ffmpeg.writeFile(inputName, sourceData);
 
   try {
-    const exitCode = await ffmpeg.exec([
+    const exitCode = await withTimeout(ffmpeg.exec([
       '-ss', String(trimStart),
       '-i', inputName,
       '-t', String(outputDuration),
@@ -159,7 +172,7 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
       '-b:a', '128k',
       '-movflags', '+faststart',
       outputName,
-    ]);
+    ]), 120_000, 'FFmpeg tardó demasiado en exportar este video. Prueba con un clip más corto.');
 
     if (exitCode !== 0) {
       throw new Error('FFmpeg no pudo exportar el video.');
