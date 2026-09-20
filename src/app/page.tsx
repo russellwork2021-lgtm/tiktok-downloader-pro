@@ -226,85 +226,72 @@ export default function Home() {
   };
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#080a12] text-white selection:bg-purple-300 selection:text-slate-950">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_8%_0%,rgba(168,85,247,0.16),transparent_34%),radial-gradient(circle_at_90%_10%,rgba(59,130,246,0.14),transparent_30%),linear-gradient(180deg,#080a12_0%,#0d1020_52%,#080a12_100%)]" />
-      <div className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,0.7)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.7)_1px,transparent_1px)] [background-size:64px_64px]" />
+    <div className="studio-shell relative min-h-screen text-white selection:bg-cyan-200 selection:text-slate-950">
+      <div className="studio-atmosphere" aria-hidden="true" />
 
-      <header className="relative z-20 border-b border-white/[0.08] bg-[#080a12]/75 backdrop-blur-xl">
+      <header className="relative z-20 border-b border-white/[0.08] bg-[#080e13]/80 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 lg:px-8">
           <a href="#top" className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-fuchsia-500 via-violet-500 to-cyan-400 shadow-lg shadow-violet-500/20">
-              <Play className="h-5 w-5 fill-white text-white" />
+            <span className="studio-logo">
+              <Play className="h-5 w-5 fill-current" />
             </span>
             <span>
-              <span className="block text-sm font-semibold tracking-[0.2em] text-white/45 uppercase">Social media</span>
-              <span className="block text-base font-bold tracking-tight text-white">Downloader Pro</span>
+              <span className="block text-[10px] font-mono tracking-[0.22em] text-cyan-200/70 uppercase">Social media</span>
+              <span className="block text-lg font-semibold tracking-tight text-white">Downloader<span className="ml-1 text-cyan-200">/pro</span></span>
             </span>
           </a>
 
           <div className="hidden items-center gap-3 sm:flex">
-            <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-400/[0.08] px-3 py-1.5 text-xs font-semibold text-emerald-300">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 shadow-[0_0_12px_rgba(110,231,183,0.9)]" />
-              Sistema listo
-            </span>
             <a href="#workspace" className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-white/75 transition hover:border-white/20 hover:bg-white/[0.09] hover:text-white">
-              Abrir workspace <ArrowUpRight className="h-3.5 w-3.5" />
+              Ir al estudio <ArrowUpRight className="h-3.5 w-3.5" />
             </a>
           </div>
         </div>
       </header>
 
-      <main id="top" className="relative z-10 mx-auto max-w-7xl px-5 pb-40 pt-12 lg:px-8 lg:pt-20">
-        <section className="mx-auto max-w-5xl text-center">
-          <div className="mx-auto">
-            <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-violet-300/20 bg-violet-300/[0.08] px-3.5 py-2 text-xs font-semibold tracking-[0.14em] text-violet-200 uppercase">
-              <Sparkles className="h-3.5 w-3.5 text-fuchsia-300" />
-              Tu contenido, a tu ritmo
+      <main id="top" className="relative z-10 mx-auto max-w-7xl px-5 pb-16 pt-10 lg:px-8 lg:pt-16">
+        <div className="studio-intro-grid">
+        <section className="studio-intro">
+          <div>
+            <div className="studio-eyebrow">
+              <Sparkles className="h-3.5 w-3.5" />
+              TU ESTUDIO DIGITAL
             </div>
-            <h1 className="mx-auto max-w-4xl text-5xl font-black leading-[0.98] tracking-[-0.055em] text-white sm:text-6xl lg:text-8xl">
-              Descarga.
-              <span className="block bg-gradient-to-r from-fuchsia-300 via-violet-300 to-cyan-300 bg-clip-text text-transparent">Guarda.</span>
-              <span className="block text-white/90">Repite.</span>
+            <h1 className="studio-title">
+              Tu contenido.
+              <span className="studio-title-accent">Otra dimensión.</span>
             </h1>
-            <p className="mx-auto mt-7 max-w-2xl text-base leading-7 text-white/55 sm:text-lg">
-              Un espacio limpio para convertir enlaces de TikTok, Instagram y Facebook en descargas directas, sin pasos innecesarios.
+            <p className="mt-6 max-w-md text-base leading-7 text-slate-400">
+              Del enlace al archivo final. Reúne tus videos, ajusta los detalles y descárgalos desde un solo lugar.
             </p>
-
-            <div className="mx-auto mt-9 grid max-w-xl grid-cols-3 gap-3 border-t border-white/10 pt-5 text-left">
-              <div>
-                <p className="text-2xl font-black tracking-tight text-white">03</p>
-                <p className="mt-1 text-[10px] font-semibold tracking-[0.16em] text-white/35 uppercase">Plataformas</p>
-              </div>
-              <div>
-                <p className="text-2xl font-black tracking-tight text-white">HD</p>
-                <p className="mt-1 text-[10px] font-semibold tracking-[0.16em] text-white/35 uppercase">Calidad lista</p>
-              </div>
-              <div>
-                <p className="text-2xl font-black tracking-tight text-white">∞</p>
-                <p className="mt-1 text-[10px] font-semibold tracking-[0.16em] text-white/35 uppercase">Flujo simple</p>
-              </div>
+            <div className="studio-signal" aria-hidden="true">
+              <div className="signal-orbit signal-orbit-one" />
+              <div className="signal-orbit signal-orbit-two" />
+              <div className="signal-core"><Play className="h-9 w-9 fill-current" /></div>
+              <span className="signal-caption">VIDEO / AUDIO / MOVIMIENTO</span>
+              <span className="signal-coordinate">+ CREA A TU RITMO</span>
             </div>
           </div>
 
         </section>
 
-        <section id="workspace" className="mt-16">
-          <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/10 bg-[#111522]/90 shadow-2xl shadow-black/25 backdrop-blur-xl">
+        <section id="workspace" className="scroll-mt-6">
+          <div className="studio-source-panel">
+            <div className="studio-panel-bar"><span>ESTUDIO / IMPORTAR</span><span className="flex gap-1.5" aria-hidden="true"><i /><i /><i /></span></div>
             <div className="border-b border-white/[0.08] px-6 py-6 sm:px-8">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <div className="mb-3 flex items-center gap-2 text-[10px] font-bold tracking-[0.2em] text-violet-300 uppercase">
-                    <span className="h-1.5 w-1.5 rounded-full bg-violet-300" />
-                    01 / Add sources
+                  <div className="mb-3 flex items-center gap-2 text-[10px] font-mono tracking-[0.2em] text-cyan-200 uppercase">
+                    01 — COMIENZA AQUÍ
                   </div>
-                  <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">Pega tus enlaces</h2>
+                  <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-3xl">Un enlace. Todo empieza.</h2>
                   <p className="mt-2 text-sm leading-6 text-white/45">Uno o varios enlaces separados por coma o salto de línea.</p>
                 </div>
               </div>
 
               <div className="mt-7 flex flex-wrap gap-2">
                 {(['tiktok', 'instagram', 'facebook'] as Platform[]).map((platform) => (
-                  <span key={platform} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.045] px-3 py-1.5 text-xs font-semibold text-white/55">
+                  <span key={platform} className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.025] px-3 py-2 text-xs font-medium text-slate-300">
                     <span className="text-white/80">{platformIcons[platform]}</span>
                     {platformNames[platform]}
                   </span>
@@ -316,7 +303,7 @@ export default function Home() {
               <div className="relative">
                 <textarea
                   aria-label="Enlaces de videos"
-                  className="h-52 w-full resize-none rounded-2xl border border-white/10 bg-[#080a12]/80 p-5 text-sm leading-7 text-white/85 outline-none transition placeholder:text-white/20 focus:border-violet-400/60 focus:ring-4 focus:ring-violet-400/10"
+                  className="studio-url-input"
                   placeholder={'https://www.tiktok.com/@usuario/video/...\nhttps://www.instagram.com/reel/...\nhttps://www.facebook.com/watch?v=...'}
                   value={urls}
                   onChange={(event) => setUrls(event.target.value)}
@@ -346,7 +333,7 @@ export default function Home() {
                 type="button"
                 onClick={extractVideos}
                 disabled={loading || downloading || urls.trim() === ''}
-                className="mt-5 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-fuchsia-500 via-violet-500 to-cyan-400 px-6 py-4 text-base font-black text-white shadow-xl shadow-violet-500/20 transition hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:from-slate-700 disabled:via-slate-700 disabled:to-slate-600 disabled:text-white/35 disabled:shadow-none"
+                className="studio-primary mt-5 flex w-full items-center justify-center gap-3 px-6 py-4 text-sm font-bold"
               >
                 {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Download className="h-5 w-5" />}
                 {loading ? `Analizando... ${progress}%` : 'Extraer videos'}
@@ -376,13 +363,15 @@ export default function Home() {
 
         </section>
 
+        </div>
+
         {videos.length > 0 && (
           <section className="mt-16">
             <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
               <div>
                 <div className="mb-3 flex items-center gap-2 text-[10px] font-bold tracking-[0.2em] text-cyan-300 uppercase">
                   <span className="h-1.5 w-1.5 rounded-full bg-cyan-300" />
-                  02 / Results
+                  02 / TUS VIDEOS
                 </div>
                 <h2 className="text-3xl font-black tracking-tight text-white sm:text-4xl">Contenido encontrado</h2>
                 <p className="mt-2 text-sm text-white/45">{videos.length} {videos.length === 1 ? 'video listo' : 'videos listos'} para descargar.</p>
@@ -416,7 +405,7 @@ export default function Home() {
                   >
                     <div className="relative aspect-[16/10] overflow-hidden bg-slate-900">
                       {video.cover ? (
-                        <img src={video.cover} alt={video.title} loading="lazy" className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                        <img src={video.cover} alt={video.title} loading="lazy" className="h-full w-full object-contain" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_20%,rgba(139,92,246,0.42),transparent_48%),linear-gradient(135deg,#111827,#312e81)]">
                           <span className={`${platformColors[video.platform]} rounded-full p-5 text-white shadow-2xl`}>
@@ -434,7 +423,7 @@ export default function Home() {
                       </span>
                       <span className="absolute bottom-4 left-4 inline-flex items-center gap-2 text-xs font-semibold text-white/80">
                         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 backdrop-blur-md"><Play className="h-3.5 w-3.5 fill-white" /></span>
-                        Vista previa disponible
+                        Miniatura del video
                       </span>
                     </div>
                     <div className="border-t border-white/[0.08] p-5">
@@ -447,10 +436,8 @@ export default function Home() {
             </div>
           </section>
         )}
-      </main>
-
       {selectedIds.size > 0 && (
-        <div className="fixed bottom-5 left-1/2 z-50 w-[calc(100%-2rem)] max-w-3xl -translate-x-1/2 rounded-[1.5rem] border border-white/15 bg-[#111522]/90 p-4 shadow-2xl shadow-black/40 backdrop-blur-2xl sm:bottom-8 sm:p-5">
+        <section aria-label="Edición y descarga" className="studio-export-panel mt-8 rounded-2xl border border-cyan-200/20 bg-[#101c24] p-4 sm:p-6">
           {editorOpen && (
             <div className="mb-5 rounded-2xl border border-white/10 bg-[#080a12]/80 p-4 sm:p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -598,13 +585,18 @@ export default function Home() {
               </button>
             </div>
           </div>
-          {downloading && selectedIds.size > 1 && (
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/10">
-              <div className="h-full rounded-full bg-gradient-to-r from-fuchsia-400 via-violet-400 to-cyan-300 transition-all duration-300" style={{ width: `${progress}%` }} />
+          {downloading && (
+            <div className="mt-5" role="status" aria-live="polite">
+              <p className="mb-2 text-xs text-cyan-100">Preparando descarga · {progress}%</p>
+              <div role="progressbar" aria-label="Procesamiento del video" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <div className="h-full rounded-full bg-cyan-200 transition-all duration-300" style={{ width: `${progress}%` }} />
+              </div>
             </div>
           )}
-        </div>
+        </section>
       )}
+      <footer className="studio-footer"><span>DOWNLOADER / PRO</span><span>Tu próximo video empieza aquí.</span></footer>
+      </main>
     </div>
   );
 }
