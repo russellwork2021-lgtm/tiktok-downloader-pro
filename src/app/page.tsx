@@ -152,6 +152,7 @@ export default function Home() {
 
   const [videos, setVideos] = useState<VideoItem[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [downloadedCount, setDownloadedCount] = useState(0);
@@ -226,6 +227,7 @@ export default function Home() {
     setVideos([]);
     setError(null);
     setSelectedIds(new Set());
+    setActiveVideoId(null);
     setPreviewUrl(null);
     setPreviewError(null);
   };
@@ -250,6 +252,7 @@ export default function Home() {
     setLoading(true);
     setVideos([]);
     setSelectedIds(new Set());
+    setActiveVideoId(null);
 
     const rawUrls = parseUrls(urls);
 
@@ -582,6 +585,7 @@ export default function Home() {
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
               {videos.map((video) => {
                 const isSelected = selectedIds.has(video.id);
+                const isPreviewing = activeVideoId === video.id;
                 return (
                   <div
                     key={video.id}
@@ -597,7 +601,20 @@ export default function Home() {
                     className={`group cursor-pointer overflow-hidden rounded-[1.5rem] border bg-white/[0.045] transition duration-300 focus:outline-none focus:ring-2 focus:ring-violet-300/70 ${isSelected ? 'border-violet-300/70 shadow-2xl shadow-violet-500/15 ring-2 ring-violet-400/30' : 'border-white/10 hover:-translate-y-1 hover:border-white/20 hover:bg-white/[0.07]'}`}
                   >
                     <div className="relative aspect-[16/10] overflow-hidden bg-slate-900">
-                      {video.cover ? (
+                      {isPreviewing ? (
+                        <div className="relative h-full w-full bg-black" onClick={(event) => event.stopPropagation()}>
+                          <video
+                            src={video.playUrl}
+                            poster={video.cover || undefined}
+                            controls
+                            playsInline
+                            preload="metadata"
+                            className="h-full w-full object-contain"
+                            aria-label={`Vista previa de ${video.title || 'video'}`}
+                          />
+                          <span className="pointer-events-none absolute left-3 top-3 rounded-full border border-white/15 bg-slate-950/65 px-2.5 py-1 text-[10px] font-bold tracking-[0.12em] text-cyan-100 uppercase backdrop-blur-md">Vista previa</span>
+                        </div>
+                      ) : video.cover ? (
                         <img src={video.cover} alt={video.title} loading="lazy" className="h-full w-full object-contain" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_50%_20%,rgba(139,92,246,0.42),transparent_48%),linear-gradient(135deg,#111827,#312e81)]">
@@ -606,7 +623,7 @@ export default function Home() {
                           </span>
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-slate-950/10" />
+                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-slate-950/85 via-transparent to-slate-950/10" />
                       <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-slate-950/50 px-2.5 py-1.5 text-[10px] font-bold tracking-[0.12em] text-white/85 uppercase backdrop-blur-md">
                         {platformIcons[video.platform]}
                         {video.platform}
@@ -614,10 +631,17 @@ export default function Home() {
                       <span className={`absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-md ${isSelected ? 'bg-violet-400 text-slate-950' : 'border border-white/20 bg-slate-950/45 text-white/55'}`}>
                         {isSelected ? <Check className="h-4 w-4" /> : <Circle className="h-4 w-4" />}
                       </span>
-                      <span className="absolute bottom-4 left-4 inline-flex items-center gap-2 text-xs font-semibold text-white/80">
-                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white/15 backdrop-blur-md"><Play className="h-3.5 w-3.5 fill-white" /></span>
-                        Miniatura del video
-                      </span>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setActiveVideoId(isPreviewing ? null : video.id);
+                        }}
+                        className="absolute bottom-4 left-4 inline-flex items-center gap-2 rounded-full border border-white/15 bg-slate-950/55 px-2.5 py-1.5 text-xs font-semibold text-white/85 backdrop-blur-md transition hover:border-cyan-200/40 hover:bg-slate-950/80"
+                      >
+                        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15">{isPreviewing ? <X className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}</span>
+                        {isPreviewing ? 'Cerrar video' : 'Ver video'}
+                      </button>
                     </div>
                     <div className="border-t border-white/[0.08] p-5">
                       <p className="text-xs font-semibold text-violet-300">@{video.author}</p>
