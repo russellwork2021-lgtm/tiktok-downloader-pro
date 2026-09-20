@@ -122,6 +122,35 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function createDownloadToken() {
+  const now = new Date();
+  const date = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('');
+  const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+    .map((part) => String(part).padStart(2, '0'))
+    .join('');
+  const random = Math.random().toString(36).slice(2, 6);
+
+  return `${date}_${time}_${random}`;
+}
+
+function filenameStem(name: string) {
+  return sanitizeFilename(name).replace(/\.mp4$/i, '');
+}
+
+function createVideoDownloadName(baseName: string, token: string, index?: number, total = 1) {
+  const sequence = total > 1 && index !== undefined
+    ? `_${String(index + 1).padStart(2, '0')}`
+    : '';
+
+  return sanitizeFilename(`${filenameStem(baseName)}_${token}${sequence}`);
+}
+
+function createZipDownloadName(baseName: string, token: string) {
+  return `${filenameStem(baseName)}_${token}_paquete.zip`;
+}
+
 function HistoryVideo({ item }: { item: HistoryItem }) {
   const objectUrl = useMemo(() => URL.createObjectURL(item.blob), [item.blob]);
 
@@ -255,7 +284,10 @@ export default function Home() {
         return;
       }
 
-      triggerBlobDownload(item.blob, item.filename);
+      triggerBlobDownload(
+        item.blob,
+        createVideoDownloadName(`${filenameStem(item.filename)}_copia`, createDownloadToken()),
+      );
       setError('Este navegador no permite compartir archivos directamente. El video se descargó para adjuntarlo manualmente.');
     } catch (shareError) {
       if (shareError instanceof DOMException && shareError.name === 'AbortError') return;
@@ -418,6 +450,7 @@ export default function Home() {
 
     const selectedVideos = videos.filter((video) => selectedIds.has(video.id));
     const archive = mode === 'zip' ? new JSZip() : null;
+    const downloadToken = createDownloadToken();
     let processedCount = 0;
 
     try {
@@ -433,10 +466,12 @@ export default function Home() {
         });
         if (cancelRequestedRef.current) break;
 
-        const outputName = selectedVideos.length === 1
-          ? filename
-          : `${filename}_${String(i + 1).padStart(2, '0')}`;
-        const safeOutputName = sanitizeFilename(outputName);
+        const safeOutputName = createVideoDownloadName(
+          filename,
+          downloadToken,
+          i,
+          selectedVideos.length,
+        );
 
         if (archive) {
           archive.file(safeOutputName, processed.blob);
@@ -455,7 +490,7 @@ export default function Home() {
           { type: 'blob', compression: 'STORE' },
           (metadata) => setProgress(Math.round(92 + metadata.percent * 0.08)),
         );
-        triggerBlobDownload(archiveBlob, sanitizeFilename(`${filename}_paquete`));
+        triggerBlobDownload(archiveBlob, createZipDownloadName(filename, downloadToken));
       }
 
       if (cancelRequestedRef.current) {
@@ -766,6 +801,9 @@ export default function Home() {
                     className="w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/25 focus:border-violet-400/60"
                     placeholder="video_editado"
                   />
+                  <span className="mt-1.5 block text-[11px] leading-4 text-white/35">
+                    La fecha, hora y un identificador único se agregan automáticamente para evitar nombres repetidos.
+                  </span>
                 </label>
 
                 <label>
