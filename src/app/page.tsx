@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import JSZip from 'jszip';
 import {
@@ -12,6 +12,7 @@ import {
   Clipboard,
   Download,
   Eye,
+  ExternalLink,
   Facebook,
   History,
   Instagram,
@@ -19,11 +20,13 @@ import {
   RotateCcw,
   Play,
   SlidersHorizontal,
+  Share2,
   Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import { processVideo, sanitizeFilename, type VideoEditSettings } from '@/lib/video-editor';
+import { clearStoredVideos, listStoredVideos, saveStoredVideo, type StoredVideoHistoryItem } from '@/lib/video-history';
 
 type Platform = 'tiktok' | 'instagram' | 'facebook';
 
@@ -37,12 +40,7 @@ interface VideoItem {
   duration: number;
 }
 
-interface HistoryItem {
-  id: string;
-  filename: string;
-  count: number;
-  createdAt: string;
-}
+type HistoryItem = StoredVideoHistoryItem;
 
 const ORIGINAL_EDIT_SETTINGS: VideoEditSettings = {
   trimStart: 0,
@@ -108,8 +106,6 @@ const EDIT_PRESETS: Array<{
   },
 ];
 
-const HISTORY_STORAGE_KEY = 'downloader-pro-history';
-
 function triggerBlobDownload(blob: Blob, filename: string) {
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement('a');
@@ -119,6 +115,30 @@ function triggerBlobDownload(blob: Blob, filename: string) {
   link.click();
   document.body.removeChild(link);
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function HistoryVideo({ item }: { item: HistoryItem }) {
+  const objectUrl = useMemo(() => URL.createObjectURL(item.blob), [item.blob]);
+
+  useEffect(() => {
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [objectUrl]);
+
+  return (
+    <video
+      src={objectUrl}
+      controls
+      playsInline
+      preload="metadata"
+      className="aspect-video w-full bg-black object-contain"
+      aria-label={`Video editado ${item.filename}`}
+    />
+  );
 }
 
 const TikTokIcon = () => (
@@ -170,14 +190,18 @@ export default function Home() {
   const automaticPresetActive = JSON.stringify(editSettings) === JSON.stringify(AUTOMATIC_EDIT_SETTINGS);
 
   useEffect(() => {
-    try {
-      const storedHistory = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-      if (storedHistory) {
-        setHistory(JSON.parse(storedHistory) as HistoryItem[]);
-      }
-    } catch {
-      // El historial es opcional; si el navegador lo bloquea seguimos trabajando.
-    }
+    let active = true;
+    listStoredVideos()
+      .then((storedVideos) => {
+        if (active) setHistory(storedVideos);
+      })
+      .catch(() => {
+        // El historial es opcional; si el navegador lo bloquea seguimos trabajando.
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -188,29 +212,64 @@ export default function Home() {
     };
   }, [previewUrl]);
 
-  const saveHistory = (count: number, name: string) => {
+  const saveHistory = async (video: VideoItem, blob: Blob, name: string) => {
     const entry: HistoryItem = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       filename: sanitizeFilename(name),
-      count,
+      title: video.title || 'Video editado',
       createdAt: new Date().toISOString(),
+      blob,
+      size: blob.size,
     };
-    const nextHistory = [entry, ...history].slice(0, 8);
-    setHistory(nextHistory);
+
     try {
-      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(nextHistory));
+      await saveStoredVideo(entry);
+      setHistory((current) => [entry, ...current].slice(0, 8));
     } catch {
-      // No bloqueamos la descarga si el almacenamiento local no está disponible.
+      setError('El video se descargó, pero no pudo guardarse en el historial local.');
     }
   };
 
-  const clearHistory = () => {
+  const clearHistory = async () => {
     setHistory([]);
     try {
-      window.localStorage.removeItem(HISTORY_STORAGE_KEY);
+      await clearStoredVideos();
     } catch {
-      // El historial puede limpiarse visualmente aunque localStorage esté bloqueado.
+      setError('No se pudo limpiar el historial local.');
     }
+  };
+
+  const handleShareHistory = async (item: HistoryItem) => {
+    const file = new File([item.blob], item.filename, { type: item.blob.type || 'video/mp4' });
+
+    try {
+      const canShareFile = typeof navigator.share === 'function'
+        && (!navigator.canShare || navigator.canShare({ files: [file] }));
+
+      if (canShareFile) {
+        await navigator.share({
+          files: [file],
+          title: item.filename,
+          text: 'Video editado desde Downloader Pro',
+        });
+        return;
+      }
+
+      triggerBlobDownload(item.blob, item.filename);
+      setError('Este navegador no permite compartir archivos directamente. El video se descargó para adjuntarlo manualmente.');
+    } catch (shareError) {
+      if (shareError instanceof DOMException && shareError.name === 'AbortError') return;
+      setError('No se pudo abrir el menú de compartir. Puedes descargar el video e insertarlo manualmente.');
+    }
+  };
+
+  const openSocialPublisher = (platform: Platform) => {
+    const publisherUrls: Record<Platform, string> = {
+      tiktok: 'https://www.tiktok.com/tiktokstudio/upload',
+      instagram: 'https://www.instagram.com/',
+      facebook: 'https://www.facebook.com/reels/create/',
+    };
+    window.open(publisherUrls[platform], '_blank', 'noopener,noreferrer');
   };
 
   const handlePaste = async () => {
@@ -385,6 +444,8 @@ export default function Home() {
           triggerBlobDownload(processed.blob, safeOutputName);
         }
 
+        await saveHistory(video, processed.blob, safeOutputName);
+
         processedCount += 1;
         setDownloadedCount(processedCount);
       }
@@ -395,10 +456,6 @@ export default function Home() {
           (metadata) => setProgress(Math.round(92 + metadata.percent * 0.08)),
         );
         triggerBlobDownload(archiveBlob, sanitizeFilename(`${filename}_paquete`));
-      }
-
-      if (processedCount > 0) {
-        saveHistory(processedCount, mode === 'zip' ? `${filename}_paquete` : filename);
       }
 
       if (cancelRequestedRef.current) {
@@ -913,17 +970,50 @@ export default function Home() {
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] text-cyan-200"><History className="h-4 w-4" /></span>
               <div>
                 <p className="text-sm font-bold text-white">Historial reciente</p>
-                <p className="mt-1 text-xs text-white/35">Solo se guardan nombres y fechas en este navegador; tus videos no se almacenan aquí.</p>
+                <p className="mt-1 text-xs text-white/35">Tus videos editados se guardan localmente en este navegador para reproducirlos, descargarlos o compartirlos.</p>
               </div>
             </div>
             <button type="button" onClick={clearHistory} className="inline-flex items-center gap-1.5 self-start text-xs font-bold text-white/45 transition hover:text-white sm:self-auto"><RotateCcw className="h-3.5 w-3.5" /> Limpiar historial</button>
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 lg:grid-cols-2">
             {history.map((item) => (
-              <div key={item.id} className="rounded-xl border border-white/10 bg-black/10 px-3 py-3">
-                <p className="truncate text-xs font-bold text-white/75" title={item.filename}>{item.filename}</p>
-                <p className="mt-1 text-[11px] text-white/35">{item.count} {item.count === 1 ? 'video' : 'videos'} · {new Date(item.createdAt).toLocaleDateString('es-DO')}</p>
-              </div>
+              <article key={item.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/15">
+                <HistoryVideo item={item} />
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-white/85" title={item.filename}>{item.filename}</p>
+                      <p className="mt-1 truncate text-xs text-white/35">{new Date(item.createdAt).toLocaleDateString('es-DO')} · {formatFileSize(item.size)}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full border border-cyan-200/15 bg-cyan-200/[0.06] px-2 py-1 text-[10px] font-bold tracking-[0.1em] text-cyan-100/70 uppercase">Editado</span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => triggerBlobDownload(item.blob, item.filename)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.12] hover:text-white"><Download className="h-3.5 w-3.5" /> Descargar</button>
+                    <button type="button" onClick={() => handleShareHistory(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200/20 bg-cyan-200/[0.08] px-3 py-2 text-xs font-bold text-cyan-100 transition hover:bg-cyan-200/[0.16]"><Share2 className="h-3.5 w-3.5" /> Compartir archivo</button>
+                  </div>
+
+                  <div className="mt-4 border-t border-white/[0.08] pt-3">
+                    <p className="mb-2 text-[10px] font-bold tracking-[0.15em] text-white/30 uppercase">Continuar publicación</p>
+                    <div className="flex flex-wrap gap-2">
+                      {(['tiktok', 'instagram', 'facebook'] as Platform[]).map((platform) => (
+                        <button
+                          key={platform}
+                          type="button"
+                          onClick={() => openSocialPublisher(platform)}
+                          title={`Abrir ${platformNames[platform]} para publicar`}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.035] px-2.5 py-2 text-xs font-semibold text-white/55 transition hover:border-white/25 hover:bg-white/[0.09] hover:text-white"
+                        >
+                          <span className="text-white/75">{platformIcons[platform]}</span>
+                          {platformNames[platform]}
+                          <ExternalLink className="h-3 w-3 text-white/30" />
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[11px] leading-5 text-white/30">Se abre la pantalla oficial de publicación; la carga final la confirma el usuario en esa red.</p>
+                  </div>
+                </div>
+              </article>
             ))}
           </div>
         </section>
