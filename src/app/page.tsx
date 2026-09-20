@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import JSZip from 'jszip';
 import {
   AlertCircle,
   ArrowUpRight,
@@ -10,13 +11,17 @@ import {
   Circle,
   Clipboard,
   Download,
+  Eye,
   Facebook,
+  History,
   Instagram,
   Loader2,
+  RotateCcw,
   Play,
   SlidersHorizontal,
   Sparkles,
   Trash2,
+  X,
 } from 'lucide-react';
 import { processVideo, sanitizeFilename, type VideoEditSettings } from '@/lib/video-editor';
 
@@ -32,6 +37,13 @@ interface VideoItem {
   duration: number;
 }
 
+interface HistoryItem {
+  id: string;
+  filename: string;
+  count: number;
+  createdAt: string;
+}
+
 const DEFAULT_EDIT_SETTINGS: VideoEditSettings = {
   trimStart: 0,
   trimEnd: 0,
@@ -44,6 +56,51 @@ const DEFAULT_EDIT_SETTINGS: VideoEditSettings = {
   volume: 100,
   fps: null,
 };
+
+const EDIT_PRESETS: Array<{
+  id: string;
+  label: string;
+  description: string;
+  settings: VideoEditSettings;
+}> = [
+  {
+    id: 'original',
+    label: 'Original',
+    description: 'Sin ajustes',
+    settings: DEFAULT_EDIT_SETTINGS,
+  },
+  {
+    id: 'soft',
+    label: 'Mejora suave',
+    description: 'Color y audio equilibrados',
+    settings: { ...DEFAULT_EDIT_SETTINGS, brightness: 3, contrast: -2, saturation: 2, volume: 90 },
+  },
+  {
+    id: 'reframe',
+    label: 'Reencuadre',
+    description: 'Zoom ligero para formato social',
+    settings: { ...DEFAULT_EDIT_SETTINGS, zoom: 4, brightness: 2, saturation: 2 },
+  },
+  {
+    id: 'audio',
+    label: 'Audio limpio',
+    description: 'Reduce el audio original',
+    settings: { ...DEFAULT_EDIT_SETTINGS, volume: 80 },
+  },
+];
+
+const HISTORY_STORAGE_KEY = 'downloader-pro-history';
+
+function triggerBlobDownload(blob: Blob, filename: string) {
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+}
 
 const TikTokIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
@@ -82,6 +139,58 @@ export default function Home() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editSettings, setEditSettings] = useState<VideoEditSettings>(DEFAULT_EDIT_SETTINGS);
   const [filename, setFilename] = useState('video_editado');
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewProgress, setPreviewProgress] = useState(0);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [downloadMode, setDownloadMode] = useState<'individual' | 'zip' | null>(null);
+  const [cancelRequested, setCancelRequested] = useState(false);
+  const cancelRequestedRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      const storedHistory = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+      if (storedHistory) {
+        setHistory(JSON.parse(storedHistory) as HistoryItem[]);
+      }
+    } catch {
+      // El historial es opcional; si el navegador lo bloquea seguimos trabajando.
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const saveHistory = (count: number, name: string) => {
+    const entry: HistoryItem = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      filename: sanitizeFilename(name),
+      count,
+      createdAt: new Date().toISOString(),
+    };
+    const nextHistory = [entry, ...history].slice(0, 8);
+    setHistory(nextHistory);
+    try {
+      window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(nextHistory));
+    } catch {
+      // No bloqueamos la descarga si el almacenamiento local no está disponible.
+    }
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    try {
+      window.localStorage.removeItem(HISTORY_STORAGE_KEY);
+    } catch {
+      // El historial puede limpiarse visualmente aunque localStorage esté bloqueado.
+    }
+  };
 
   const handlePaste = async () => {
     try {
@@ -97,10 +206,12 @@ export default function Home() {
     setVideos([]);
     setError(null);
     setSelectedIds(new Set());
+    setPreviewUrl(null);
+    setPreviewError(null);
   };
 
   const parseUrls = (input: string): string[] => {
-    return input
+    return Array.from(new Set(input
       .split(/[,\n]+/)
       .map((url) => url.trim())
       .filter((url) => {
@@ -111,7 +222,7 @@ export default function Home() {
           lower.includes('facebook.com') ||
           lower.includes('fb.watch')
         );
-      });
+      })));
   };
 
   const extractVideos = async () => {
@@ -140,8 +251,13 @@ export default function Home() {
         } else {
           errors.push(`No se pudo obtener: ${url.substring(0, 40)}...`);
         }
-      } catch {
-        errors.push(`Error: ${url.substring(0, 40)}...`);
+      } catch (requestError) {
+        const apiMessage = axios.isAxiosError(requestError)
+          ? requestError.response?.data?.error
+          : null;
+        errors.push(apiMessage
+          ? `${url.substring(0, 34)}... — ${apiMessage}`
+          : `Error: ${url.substring(0, 40)}...`);
       }
       setProgress(Math.round(((i + 1) / rawUrls.length) * 100));
     }
@@ -177,17 +293,54 @@ export default function Home() {
     }
   };
 
-  const handleDownload = async () => {
+  const applyPreset = (preset: (typeof EDIT_PRESETS)[number]) => {
+    setEditSettings({ ...preset.settings });
+    setEditorOpen(true);
+    setPreviewError(null);
+  };
+
+  const handlePreview = async () => {
+    const video = videos.find((item) => selectedIds.has(item.id));
+    if (!video) return;
+
+    setPreviewLoading(true);
+    setPreviewProgress(0);
+    setPreviewError(null);
+
+    try {
+      const processed = await processVideo({
+        sourceUrl: video.playUrl,
+        settings: editSettings,
+        onProgress: (value) => setPreviewProgress(Math.round(value * 100)),
+      });
+      setPreviewUrl(URL.createObjectURL(processed.blob));
+    } catch (previewProcessingError) {
+      setPreviewError(previewProcessingError instanceof Error
+        ? previewProcessingError.message
+        : 'No se pudo generar la vista previa.');
+    } finally {
+      setPreviewLoading(false);
+      setPreviewProgress(0);
+    }
+  };
+
+  const handleDownload = async (mode: 'individual' | 'zip' = 'individual') => {
     if (selectedIds.size === 0) return;
     setDownloading(true);
+    setDownloadMode(mode);
     setProgress(0);
     setDownloadedCount(0);
     setError(null);
+    cancelRequestedRef.current = false;
+    setCancelRequested(false);
 
     const selectedVideos = videos.filter((video) => selectedIds.has(video.id));
+    const archive = mode === 'zip' ? new JSZip() : null;
+    let processedCount = 0;
 
     try {
       for (let i = 0; i < selectedVideos.length; i++) {
+        if (cancelRequestedRef.current) break;
         const video = selectedVideos[i];
         const processed = await processVideo({
           sourceUrl: video.playUrl,
@@ -196,19 +349,37 @@ export default function Home() {
             setProgress(Math.round(((i + videoProgress) / selectedVideos.length) * 100));
           },
         });
+        if (cancelRequestedRef.current) break;
+
         const outputName = selectedVideos.length === 1
           ? filename
           : `${filename}_${String(i + 1).padStart(2, '0')}`;
-        const objectUrl = URL.createObjectURL(processed.blob);
-        const link = document.createElement('a');
-        link.href = objectUrl;
-        link.download = sanitizeFilename(outputName);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+        const safeOutputName = sanitizeFilename(outputName);
 
-        setDownloadedCount(i + 1);
+        if (archive) {
+          archive.file(safeOutputName, processed.blob);
+        } else {
+          triggerBlobDownload(processed.blob, safeOutputName);
+        }
+
+        processedCount += 1;
+        setDownloadedCount(processedCount);
+      }
+
+      if (archive && processedCount > 0 && !cancelRequestedRef.current) {
+        const archiveBlob = await archive.generateAsync(
+          { type: 'blob', compression: 'STORE' },
+          (metadata) => setProgress(Math.round(92 + metadata.percent * 0.08)),
+        );
+        triggerBlobDownload(archiveBlob, sanitizeFilename(`${filename}_paquete`));
+      }
+
+      if (processedCount > 0) {
+        saveHistory(processedCount, mode === 'zip' ? `${filename}_paquete` : filename);
+      }
+
+      if (cancelRequestedRef.current) {
+        setError(`Proceso cancelado. ${processedCount} video(s) ya estaban listos.`);
       }
     } catch (downloadError) {
       const message = downloadError instanceof Error
@@ -222,6 +393,8 @@ export default function Home() {
     } finally {
       setDownloading(false);
       setProgress(0);
+      setDownloadMode(null);
+      setCancelRequested(false);
     }
   };
 
@@ -455,6 +628,33 @@ export default function Home() {
                 </button>
               </div>
 
+              <div className="mb-5">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold tracking-[0.14em] text-cyan-200 uppercase">Presets rápidos</p>
+                    <p className="mt-1 text-xs text-white/35">Aplica una base y luego ajusta cada control.</p>
+                  </div>
+                  <span className="hidden text-[10px] font-mono tracking-[0.12em] text-white/25 uppercase sm:block">Edición para contenido propio</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                  {EDIT_PRESETS.map((preset) => {
+                    const isActive = JSON.stringify(editSettings) === JSON.stringify(preset.settings);
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => applyPreset(preset)}
+                        disabled={downloading || previewLoading}
+                        className={`rounded-xl border px-3 py-3 text-left transition disabled:cursor-not-allowed disabled:opacity-40 ${isActive ? 'border-cyan-200/50 bg-cyan-200/10' : 'border-white/10 bg-white/[0.03] hover:border-white/25 hover:bg-white/[0.07]'}`}
+                      >
+                        <span className="block text-xs font-bold text-white/85">{preset.label}</span>
+                        <span className="mt-1 block text-[11px] leading-4 text-white/35">{preset.description}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <label className="sm:col-span-2 lg:col-span-4">
                   <span className="mb-1.5 block text-[10px] font-bold tracking-[0.16em] text-white/35 uppercase">Nombre del archivo</span>
@@ -547,9 +747,51 @@ export default function Home() {
                   <input type="range" min="-20" max="20" step="1" value={editSettings.contrast} onChange={(event) => setEditSettings((current) => ({ ...current, contrast: Number(event.target.value) }))} disabled={downloading} className="w-full accent-violet-400" />
                 </label>
                 <label>
+                  <span className="mb-1.5 flex justify-between text-[10px] font-bold tracking-[0.16em] text-white/35 uppercase"><span>Saturación</span><span>{editSettings.saturation > 0 ? '+' : ''}{editSettings.saturation}%</span></span>
+                  <input type="range" min="-20" max="20" step="1" value={editSettings.saturation} onChange={(event) => setEditSettings((current) => ({ ...current, saturation: Number(event.target.value) }))} disabled={downloading} className="w-full accent-violet-400" />
+                </label>
+                <label>
                   <span className="mb-1.5 flex justify-between text-[10px] font-bold tracking-[0.16em] text-white/35 uppercase"><span>Volumen</span><span>{editSettings.volume}%</span></span>
                   <input type="range" min="0" max="150" step="5" value={editSettings.volume} onChange={(event) => setEditSettings((current) => ({ ...current, volume: Number(event.target.value) }))} disabled={downloading} className="w-full accent-violet-400" />
                 </label>
+              </div>
+
+              <div className="mt-5 rounded-2xl border border-cyan-200/10 bg-cyan-100/[0.03] p-4">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-cyan-200/10 text-cyan-200"><Eye className="h-4 w-4" /></span>
+                    <div>
+                      <p className="text-sm font-bold text-white">Vista previa del resultado</p>
+                      <p className="mt-1 text-xs leading-5 text-white/40">Procesa el primer video seleccionado para revisar los cambios antes de descargar.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handlePreview}
+                    disabled={downloading || previewLoading}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-200/25 bg-cyan-200/10 px-4 py-3 text-xs font-bold text-cyan-100 transition hover:bg-cyan-200/20 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                  >
+                    {previewLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4 fill-current" />}
+                    {previewLoading ? `Generando ${previewProgress}%` : 'Generar vista previa'}
+                  </button>
+                </div>
+
+                {previewError && (
+                  <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-300/15 bg-red-400/[0.08] p-3 text-xs leading-5 text-red-200">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                    <span>{previewError}</span>
+                  </div>
+                )}
+
+                {previewUrl && !previewLoading && (
+                  <div className="mt-4 overflow-hidden rounded-xl border border-white/10 bg-black">
+                    <video className="mx-auto max-h-[480px] w-full object-contain" src={previewUrl} controls playsInline preload="metadata" />
+                    <div className="flex items-center justify-between gap-3 border-t border-white/10 px-3 py-2">
+                      <span className="text-[10px] font-mono tracking-[0.12em] text-white/35 uppercase">Preview listo</span>
+                      <button type="button" onClick={() => setPreviewUrl(null)} className="inline-flex items-center gap-1 text-xs font-bold text-white/50 transition hover:text-white"><X className="h-3.5 w-3.5" /> Cerrar</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -568,7 +810,7 @@ export default function Home() {
               <button
                 type="button"
                 onClick={() => setEditorOpen((open) => !open)}
-                disabled={downloading}
+                disabled={downloading || previewLoading}
                 className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto ${editorOpen ? 'border-violet-300/40 bg-violet-400/15 text-violet-100' : 'border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/[0.1] hover:text-white'}`}
               >
                 <SlidersHorizontal className="h-4 w-4" />
@@ -576,23 +818,68 @@ export default function Home() {
               </button>
               <button
                 type="button"
-                onClick={handleDownload}
-                disabled={downloading}
+                onClick={() => handleDownload('individual')}
+                disabled={downloading || previewLoading}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-white px-5 py-3.5 text-sm font-black text-slate-950 transition hover:bg-cyan-100 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/40 sm:w-auto"
               >
                 {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {downloading ? `${downloadedCount}/${selectedIds.size} procesados` : 'Descargar video editado'}
+                {downloading ? `${downloadedCount}/${selectedIds.size} procesados` : 'Descargar editados'}
               </button>
+              {selectedIds.size > 1 && (
+                <button
+                  type="button"
+                  onClick={() => handleDownload('zip')}
+                  disabled={downloading || previewLoading}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-200/25 bg-cyan-200/10 px-5 py-3.5 text-sm font-black text-cyan-100 transition hover:bg-cyan-200/20 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                >
+                  <Download className="h-4 w-4" />
+                  {downloadMode === 'zip' ? 'Creando ZIP…' : 'Descargar ZIP'}
+                </button>
+              )}
             </div>
           </div>
           {downloading && (
             <div className="mt-5" role="status" aria-live="polite">
-              <p className="mb-2 text-xs text-cyan-100">Preparando descarga · {progress}%</p>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-xs text-cyan-100">Preparando descarga · {progress}%</p>
+                <button
+                  type="button"
+                  onClick={() => { cancelRequestedRef.current = true; setCancelRequested(true); }}
+                  disabled={cancelRequested}
+                  className="inline-flex items-center gap-1 text-xs font-bold text-white/55 transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  {cancelRequested ? 'Cancelando…' : 'Cancelar'}
+                </button>
+              </div>
               <div role="progressbar" aria-label="Procesamiento del video" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} className="h-1.5 overflow-hidden rounded-full bg-white/10">
                 <div className="h-full rounded-full bg-cyan-200 transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {history.length > 0 && (
+        <section aria-label="Historial local" className="mt-12 rounded-2xl border border-white/10 bg-white/[0.035] p-5 sm:p-6">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] text-cyan-200"><History className="h-4 w-4" /></span>
+              <div>
+                <p className="text-sm font-bold text-white">Historial reciente</p>
+                <p className="mt-1 text-xs text-white/35">Solo se guardan nombres y fechas en este navegador; tus videos no se almacenan aquí.</p>
+              </div>
+            </div>
+            <button type="button" onClick={clearHistory} className="inline-flex items-center gap-1.5 self-start text-xs font-bold text-white/45 transition hover:text-white sm:self-auto"><RotateCcw className="h-3.5 w-3.5" /> Limpiar historial</button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {history.map((item) => (
+              <div key={item.id} className="rounded-xl border border-white/10 bg-black/10 px-3 py-3">
+                <p className="truncate text-xs font-bold text-white/75" title={item.filename}>{item.filename}</p>
+                <p className="mt-1 text-[11px] text-white/35">{item.count} {item.count === 1 ? 'video' : 'videos'} · {new Date(item.createdAt).toLocaleDateString('es-DO')}</p>
+              </div>
+            ))}
+          </div>
         </section>
       )}
       <footer className="studio-footer"><span>DOWNLOADER / PRO</span><span>Tu próximo video empieza aquí.</span></footer>
