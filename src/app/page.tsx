@@ -60,7 +60,7 @@ const ORIGINAL_EDIT_SETTINGS: VideoEditSettings = {
 const AUTOMATIC_EDIT_SETTINGS: VideoEditSettings = {
   trimStart: 0.1,
   trimEnd: 0.1,
-  zoom: 0,
+  zoom: 1,
   flip: false,
   speed: 1.03,
   brightness: 3,
