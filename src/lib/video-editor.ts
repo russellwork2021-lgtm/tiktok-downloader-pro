@@ -155,11 +155,16 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
   ].filter(Boolean).join(',');
   const audioFilters = [`atempo=${speed}`, `volume=${clamp(settings.volume, 0, 200) / 100}`].join(',');
 
-  ffmpeg.on('progress', ({ progress }) => onProgress?.(0.12 + Math.max(0, Math.min(progress, 1)) * 0.84));
-  await ffmpeg.writeFile(inputName, sourceData);
+  const progressListener = ({ progress }: { progress: number }) => {
+    onProgress?.(0.12 + Math.max(0, Math.min(progress, 1)) * 0.84);
+  };
+  ffmpeg.on('progress', progressListener);
 
   try {
-    const exitCode = await withTimeout(ffmpeg.exec([
+    await ffmpeg.writeFile(inputName, sourceData);
+    const renderTimeoutMs = Math.min(300_000, Math.max(180_000, 120_000 + sourceDuration * 4_000));
+    const renderTimeoutMessage = 'La exportación está tardando más de lo esperado. Puedes reintentarlo con un clip más corto o menor resolución.';
+    const execPromise = ffmpeg.exec([
       '-ss', String(trimStart),
       '-i', inputName,
       '-t', String(outputDuration),
@@ -168,13 +173,28 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
       '-vf', videoFilters,
       '-af', audioFilters,
       '-c:v', 'libx264',
+      '-threads', '0',
       '-preset', 'ultrafast',
+      '-tune', 'zerolatency',
       '-crf', '23',
       '-c:a', 'aac',
       '-b:a', '128k',
       '-movflags', '+faststart',
       outputName,
-    ]), 120_000, 'FFmpeg tardó demasiado en exportar este video. Prueba con un clip más corto.');
+    ]);
+    // Si el tiempo límite vence, evitamos una promesa rechazada sin manejar mientras reiniciamos FFmpeg.
+    execPromise.catch(() => undefined);
+
+    let exitCode: number;
+    try {
+      exitCode = await withTimeout(execPromise, renderTimeoutMs, renderTimeoutMessage);
+    } catch (error) {
+      if (error instanceof Error && error.message === renderTimeoutMessage) {
+        ffmpeg.terminate();
+        ffmpegPromise = null;
+      }
+      throw error;
+    }
 
     if (exitCode !== 0) {
       throw new Error('FFmpeg no pudo exportar el video.');
@@ -191,6 +211,7 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
       duration: outputDuration / speed,
     };
   } finally {
+    ffmpeg.off('progress', progressListener);
     await Promise.allSettled([
       ffmpeg.deleteFile(inputName),
       ffmpeg.deleteFile(outputName),
