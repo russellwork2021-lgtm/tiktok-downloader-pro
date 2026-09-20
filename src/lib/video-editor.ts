@@ -138,14 +138,16 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
   const ffmpeg = await getFfmpeg();
   const inputName = 'source.mp4';
   const outputName = 'edited.mp4';
-  const zoomFactor = 1 + clamp(settings.zoom, 0, 30) / 100;
+  const zoomPercent = clamp(settings.zoom, 0, 10);
+  const zoomFactor = 1 + zoomPercent / 100;
   const speed = clamp(settings.speed, 0.5, 2);
   const brightness = clamp(settings.brightness, -100, 100) / 100;
   const contrast = 1 + clamp(settings.contrast, -100, 100) / 100;
   const saturation = 1 + clamp(settings.saturation, -100, 100) / 100;
   const videoFilters = [
-    `scale=ceil(iw*${zoomFactor}/2)*2:ceil(ih*${zoomFactor}/2)*2`,
-    `crop=trunc(iw/${zoomFactor}/2)*2:trunc(ih/${zoomFactor}/2)`,
+    zoomPercent > 0
+      ? `scale=ceil(iw*${zoomFactor}/2)*2:ceil(ih*${zoomFactor}/2)*2,crop=trunc(iw/${zoomFactor}/2)*2:trunc(ih/${zoomFactor}/2)`
+      : '',
     settings.flip ? 'hflip' : '',
     `eq=brightness=${brightness}:contrast=${contrast}:saturation=${saturation}`,
     settings.fps ? `fps=${settings.fps}` : '',

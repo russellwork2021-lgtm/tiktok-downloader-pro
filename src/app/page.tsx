@@ -549,7 +549,7 @@ export default function Home() {
 
                 <label>
                   <span className="mb-1.5 flex justify-between text-[10px] font-bold tracking-[0.16em] text-white/35 uppercase"><span>Zoom</span><span>{editSettings.zoom}%</span></span>
-                  <input type="range" min="0" max="20" step="1" value={editSettings.zoom} onChange={(event) => setEditSettings((current) => ({ ...current, zoom: Number(event.target.value) }))} disabled={downloading} className="w-full accent-violet-400" />
+                  <input type="range" min="0" max="10" step="1" value={editSettings.zoom} onChange={(event) => setEditSettings((current) => ({ ...current, zoom: Number(event.target.value) }))} disabled={downloading} className="w-full accent-violet-400" />
                 </label>
                 <label>
                   <span className="mb-1.5 flex justify-between text-[10px] font-bold tracking-[0.16em] text-white/35 uppercase"><span>Brillo</span><span>{editSettings.brightness > 0 ? '+' : ''}{editSettings.brightness}%</span></span>
