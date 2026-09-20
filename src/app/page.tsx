@@ -147,6 +147,10 @@ function createVideoDownloadName(baseName: string, token: string, index?: number
   return sanitizeFilename(`${filenameStem(baseName)}_${token}${sequence}`);
 }
 
+function createReplayDownloadName(baseName: string) {
+  return createVideoDownloadName(`${filenameStem(baseName)}_copia`, createDownloadToken());
+}
+
 function createZipDownloadName(baseName: string, token: string) {
   return `${filenameStem(baseName)}_${token}_paquete.zip`;
 }
@@ -286,7 +290,7 @@ export default function Home() {
 
       triggerBlobDownload(
         item.blob,
-        createVideoDownloadName(`${filenameStem(item.filename)}_copia`, createDownloadToken()),
+        createReplayDownloadName(item.filename),
       );
       setError('Este navegador no permite compartir archivos directamente. El video se descargó para adjuntarlo manualmente.');
     } catch (shareError) {
@@ -1027,7 +1031,7 @@ export default function Home() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => triggerBlobDownload(item.blob, item.filename)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.12] hover:text-white"><Download className="h-3.5 w-3.5" /> Descargar</button>
+                    <button type="button" onClick={() => triggerBlobDownload(item.blob, createReplayDownloadName(item.filename))} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.12] hover:text-white"><Download className="h-3.5 w-3.5" /> Descargar</button>
                     <button type="button" onClick={() => handleShareHistory(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200/20 bg-cyan-200/[0.08] px-3 py-2 text-xs font-bold text-cyan-100 transition hover:bg-cyan-200/[0.16]"><Share2 className="h-3.5 w-3.5" /> Compartir archivo</button>
                   </div>
 
