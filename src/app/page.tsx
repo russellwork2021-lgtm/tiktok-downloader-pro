@@ -44,7 +44,7 @@ interface HistoryItem {
   createdAt: string;
 }
 
-const DEFAULT_EDIT_SETTINGS: VideoEditSettings = {
+const ORIGINAL_EDIT_SETTINGS: VideoEditSettings = {
   trimStart: 0,
   trimEnd: 0,
   zoom: 0,
@@ -57,6 +57,19 @@ const DEFAULT_EDIT_SETTINGS: VideoEditSettings = {
   fps: null,
 };
 
+const AUTOMATIC_EDIT_SETTINGS: VideoEditSettings = {
+  trimStart: 0.1,
+  trimEnd: 0.1,
+  zoom: 2,
+  flip: false,
+  speed: 1.03,
+  brightness: 3,
+  contrast: -2,
+  saturation: 2,
+  volume: 90,
+  fps: null,
+};
+
 const EDIT_PRESETS: Array<{
   id: string;
   label: string;
@@ -64,28 +77,34 @@ const EDIT_PRESETS: Array<{
   settings: VideoEditSettings;
 }> = [
   {
+    id: 'automatic',
+    label: 'Automático',
+    description: 'Se aplica al descargar',
+    settings: AUTOMATIC_EDIT_SETTINGS,
+  },
+  {
     id: 'original',
     label: 'Original',
     description: 'Sin ajustes',
-    settings: DEFAULT_EDIT_SETTINGS,
+    settings: ORIGINAL_EDIT_SETTINGS,
   },
   {
     id: 'soft',
     label: 'Mejora suave',
     description: 'Color y audio equilibrados',
-    settings: { ...DEFAULT_EDIT_SETTINGS, brightness: 3, contrast: -2, saturation: 2, volume: 90 },
+    settings: { ...ORIGINAL_EDIT_SETTINGS, brightness: 3, contrast: -2, saturation: 2, volume: 90 },
   },
   {
     id: 'reframe',
     label: 'Reencuadre',
     description: 'Zoom ligero para formato social',
-    settings: { ...DEFAULT_EDIT_SETTINGS, zoom: 4, brightness: 2, saturation: 2 },
+    settings: { ...ORIGINAL_EDIT_SETTINGS, zoom: 4, brightness: 2, saturation: 2 },
   },
   {
     id: 'audio',
     label: 'Audio limpio',
     description: 'Reduce el audio original',
-    settings: { ...DEFAULT_EDIT_SETTINGS, volume: 80 },
+    settings: { ...ORIGINAL_EDIT_SETTINGS, volume: 80 },
   },
 ];
 
@@ -137,7 +156,7 @@ export default function Home() {
   const [progress, setProgress] = useState(0);
   const [downloadedCount, setDownloadedCount] = useState(0);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editSettings, setEditSettings] = useState<VideoEditSettings>(DEFAULT_EDIT_SETTINGS);
+  const [editSettings, setEditSettings] = useState<VideoEditSettings>(AUTOMATIC_EDIT_SETTINGS);
   const [filename, setFilename] = useState('video_editado');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -147,6 +166,7 @@ export default function Home() {
   const [downloadMode, setDownloadMode] = useState<'individual' | 'zip' | null>(null);
   const [cancelRequested, setCancelRequested] = useState(false);
   const cancelRequestedRef = useRef(false);
+  const automaticPresetActive = JSON.stringify(editSettings) === JSON.stringify(AUTOMATIC_EDIT_SETTINGS);
 
   useEffect(() => {
     try {
@@ -620,11 +640,11 @@ export default function Home() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setEditSettings(DEFAULT_EDIT_SETTINGS)}
+                  onClick={() => setEditSettings({ ...AUTOMATIC_EDIT_SETTINGS })}
                   disabled={downloading}
                   className="text-xs font-bold text-violet-300 transition hover:text-white disabled:opacity-40"
                 >
-                  Restablecer
+                  Restablecer automático
                 </button>
               </div>
 
@@ -803,7 +823,9 @@ export default function Home() {
               </span>
               <div>
                 <p className="text-sm font-bold text-white">{selectedIds.size} {selectedIds.size === 1 ? 'video seleccionado' : 'videos seleccionados'}</p>
-                <p className="mt-1 text-xs text-white/40">Edición local antes de guardar en tu PC</p>
+                <p className="mt-1 text-xs text-white/40">
+                  {automaticPresetActive ? 'Preset automático activo al descargar' : 'Ajustes personalizados activos'}
+                </p>
               </div>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -814,7 +836,7 @@ export default function Home() {
                 className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3.5 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto ${editorOpen ? 'border-violet-300/40 bg-violet-400/15 text-violet-100' : 'border-white/10 bg-white/[0.06] text-white/70 hover:bg-white/[0.1] hover:text-white'}`}
               >
                 <SlidersHorizontal className="h-4 w-4" />
-                {editorOpen ? 'Ocultar edición' : 'Editar antes de descargar'}
+                {editorOpen ? 'Ocultar edición' : 'Editar opcionalmente'}
               </button>
               <button
                 type="button"
