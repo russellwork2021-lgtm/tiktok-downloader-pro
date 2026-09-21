@@ -5,8 +5,8 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY package.json ./
-COPY server.mjs ./
+COPY video-worker/package.json ./
+COPY video-worker/server.mjs ./
 
 ENV NODE_ENV=production
 ENV PORT=8787
