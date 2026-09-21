@@ -114,6 +114,61 @@ async function getVideoDuration(data: Uint8Array): Promise<number> {
   });
 }
 
+async function processWithNativeWorker({ sourceUrl, settings, onProgress }: ProcessVideoOptions): Promise<ProcessedVideo> {
+  const workerUrl = process.env.NEXT_PUBLIC_VIDEO_PROCESSOR_URL?.trim().replace(/\/+$/, '');
+  if (!workerUrl) {
+    throw new Error('El procesador nativo no está configurado.');
+  }
+
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), 360_000);
+  onProgress?.(0.04);
+
+  let response: Response;
+  try {
+    response = await fetch(`${workerUrl}/v1/process`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.NEXT_PUBLIC_VIDEO_PROCESSOR_KEY
+          ? { 'X-Video-Processor-Key': process.env.NEXT_PUBLIC_VIDEO_PROCESSOR_KEY }
+          : {}),
+      },
+      body: JSON.stringify({ sourceUrl, settings }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      throw new Error('El procesador nativo tardó demasiado en exportar este video.');
+    }
+    throw new Error('No se pudo conectar con el procesador nativo de video.');
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+
+  if (!response.ok) {
+    let message = '';
+    try {
+      const payload = await response.json() as { error?: string };
+      message = payload.error?.trim() || '';
+    } catch {
+      // El worker puede responder con texto si ocurre un error de infraestructura.
+    }
+    throw new Error(message || `El procesador nativo rechazó el video (${response.status}).`);
+  }
+
+  const blob = await response.blob();
+  if (blob.size === 0) {
+    throw new Error('El procesador nativo devolvió un archivo vacío.');
+  }
+  onProgress?.(1);
+
+  return {
+    blob: new Blob([blob], { type: 'video/mp4' }),
+    duration: Number(response.headers.get('X-Video-Duration') || 0),
+  };
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
@@ -141,6 +196,10 @@ export function sanitizeFilename(name: string) {
 export async function processVideo({ sourceUrl, settings, onProgress }: ProcessVideoOptions): Promise<ProcessedVideo> {
   if (typeof window === 'undefined') {
     throw new Error('El editor de video solo puede ejecutarse en el navegador.');
+  }
+
+  if (process.env.NEXT_PUBLIC_VIDEO_PROCESSOR_URL?.trim()) {
+    return processWithNativeWorker({ sourceUrl, settings, onProgress });
   }
 
   onProgress?.(0.02);
