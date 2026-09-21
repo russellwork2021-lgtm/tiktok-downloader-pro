@@ -111,6 +111,15 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function readErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message.trim();
+  if (typeof error === 'string') return error.trim();
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String(error.message).trim();
+  }
+  return '';
+}
+
 export function sanitizeFilename(name: string) {
   const cleaned = name
     .trim()
@@ -178,7 +187,12 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
   const progressListener = ({ progress }: { progress: number }) => {
     onProgress?.(0.12 + Math.max(0, Math.min(progress, 1)) * 0.84);
   };
+  let lastFfmpegMessage = '';
+  const logListener = ({ message }: { message: string }) => {
+    if (message.trim()) lastFfmpegMessage = message.trim();
+  };
   ffmpeg.on('progress', progressListener);
+  ffmpeg.on('log', logListener);
 
   try {
     await ffmpeg.writeFile(inputName, sourceData);
@@ -217,7 +231,9 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
     }
 
     if (exitCode !== 0) {
-      throw new Error('FFmpeg no pudo exportar el video.');
+      throw new Error(lastFfmpegMessage
+        ? `FFmpeg no pudo exportar el video: ${lastFfmpegMessage}`
+        : 'FFmpeg no pudo exportar el video.');
     }
 
     const outputData = await ffmpeg.readFile(outputName);
@@ -230,8 +246,13 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
       blob: new Blob([getArrayBuffer(outputData)], { type: 'video/mp4' }),
       duration: outputDuration / speed,
     };
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    const message = readErrorMessage(error);
+    throw new Error(message || lastFfmpegMessage || 'FFmpeg no pudo exportar el video.');
   } finally {
     ffmpeg.off('progress', progressListener);
+    ffmpeg.off('log', logListener);
     await Promise.allSettled([
       ffmpeg.deleteFile(inputName),
       ffmpeg.deleteFile(outputName),

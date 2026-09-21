@@ -131,7 +131,13 @@ function formatFileSize(bytes: number) {
 }
 
 function formatProcessingError(error: unknown, fallback: string) {
-  const message = error instanceof Error ? error.message.trim() : '';
+  const message = error instanceof Error
+    ? error.message.trim()
+    : typeof error === 'string'
+      ? error.trim()
+      : error && typeof error === 'object' && 'message' in error
+        ? String(error.message).trim()
+        : '';
   const normalizedMessage = message.toLowerCase();
 
   if (normalizedMessage.includes('tardó demasiado') || normalizedMessage.includes('timeout')) {
@@ -140,6 +146,14 @@ function formatProcessingError(error: unknown, fallback: string) {
 
   if (normalizedMessage.includes('no permite edición') || normalizedMessage.includes('cors')) {
     return 'Este video no permite edición directa desde el navegador. Prueba con otro enlace público.';
+  }
+
+  if (normalizedMessage.includes('hevc') || normalizedMessage.includes('decoder')) {
+    return 'El navegador no pudo decodificar el formato de este video. Prueba con otro video o usa un navegador actualizado.';
+  }
+
+  if (normalizedMessage.includes('memory') || normalizedMessage.includes('memoria')) {
+    return 'El video requiere más memoria de la disponible en el navegador. Prueba procesarlo individualmente.';
   }
 
   return message || fallback;
@@ -512,11 +526,13 @@ export default function Home() {
     const archive = mode === 'zip' ? new JSZip() : null;
     const downloadToken = createDownloadToken();
     let processedCount = 0;
+    let currentVideoTitle = '';
 
     try {
       for (let i = 0; i < selectedVideos.length; i++) {
         if (cancelRequestedRef.current) break;
         const video = selectedVideos[i];
+        currentVideoTitle = video.title || `video ${i + 1}`;
         const processed = await processVideo({
           sourceUrl: video.playUrl,
           settings: editSettings,
@@ -557,7 +573,8 @@ export default function Home() {
         setError(`Proceso cancelado. ${processedCount} video(s) ya estaban listos.`);
       }
     } catch (downloadError) {
-      setError(formatProcessingError(downloadError, 'No se pudo editar uno de los videos. Verifica que siga disponible e inténtalo nuevamente.'));
+      const detail = formatProcessingError(downloadError, 'Verifica que siga disponible e inténtalo nuevamente.');
+      setError(`No se pudo editar "${currentVideoTitle || 'uno de los videos'}". ${detail}`);
     } finally {
       setDownloading(false);
       setProgress(0);
