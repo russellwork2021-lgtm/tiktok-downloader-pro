@@ -310,8 +310,6 @@ export default function Home() {
   };
 
   const clearHistory = async () => {
-    if (!window.confirm('¿Quieres eliminar todos los videos guardados en este navegador?')) return;
-
     try {
       await clearStoredVideos();
       setHistory([]);
@@ -321,8 +319,6 @@ export default function Home() {
   };
 
   const removeHistoryItem = async (item: HistoryItem) => {
-    if (!window.confirm(`¿Quieres eliminar "${item.filename}" del historial?`)) return;
-
     try {
       await deleteStoredVideo(item.id);
       setHistory((current) => current.filter((storedItem) => storedItem.id !== item.id));
