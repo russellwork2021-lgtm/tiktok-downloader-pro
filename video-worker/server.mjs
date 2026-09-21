@@ -26,6 +26,7 @@ const DEFAULT_ALLOWED_DOMAINS = [
   'tiktok.com',
   'tiktokcdn.com',
   'tiktokv.com',
+  'tiktokio.com',
   'muscdn.com',
   'instagram.com',
   'cdninstagram.com',
