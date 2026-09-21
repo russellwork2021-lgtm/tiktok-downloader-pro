@@ -26,7 +26,15 @@ import {
   X,
 } from 'lucide-react';
 import { processVideo, sanitizeFilename, type VideoEditSettings } from '@/lib/video-editor';
-import { clearStoredVideos, listStoredVideos, saveStoredVideo, type StoredVideoHistoryItem } from '@/lib/video-history';
+import {
+  clearStoredVideos,
+  deleteStoredVideo,
+  HISTORY_RETENTION_DAYS,
+  listStoredVideos,
+  MAX_STORED_VIDEOS,
+  saveStoredVideo,
+  type StoredVideoHistoryItem,
+} from '@/lib/video-history';
 
 type Platform = 'tiktok' | 'instagram' | 'facebook';
 
@@ -120,6 +128,21 @@ function triggerBlobDownload(blob: Blob, filename: string) {
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatProcessingError(error: unknown, fallback: string) {
+  const message = error instanceof Error ? error.message.trim() : '';
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes('tardó demasiado') || normalizedMessage.includes('timeout')) {
+    return 'El video tardó demasiado en procesarse. Prueba con un clip más corto o vuelve a intentarlo.';
+  }
+
+  if (normalizedMessage.includes('no permite edición') || normalizedMessage.includes('cors')) {
+    return 'Este video no permite edición directa desde el navegador. Prueba con otro enlace público.';
+  }
+
+  return message || fallback;
 }
 
 function createDownloadToken() {
@@ -221,6 +244,7 @@ export default function Home() {
   const [cancelRequested, setCancelRequested] = useState(false);
   const cancelRequestedRef = useRef(false);
   const automaticPresetActive = JSON.stringify(editSettings) === JSON.stringify(AUTOMATIC_EDIT_SETTINGS);
+  const historySize = useMemo(() => history.reduce((total, item) => total + item.size, 0), [history]);
 
   useEffect(() => {
     let active = true;
@@ -257,18 +281,31 @@ export default function Home() {
 
     try {
       await saveStoredVideo(entry);
-      setHistory((current) => [entry, ...current].slice(0, 8));
+      setHistory((current) => [entry, ...current].slice(0, MAX_STORED_VIDEOS));
     } catch {
       setError('El video se descargó, pero no pudo guardarse en el historial local.');
     }
   };
 
   const clearHistory = async () => {
-    setHistory([]);
+    if (!window.confirm('¿Quieres eliminar todos los videos guardados en este navegador?')) return;
+
     try {
       await clearStoredVideos();
+      setHistory([]);
     } catch {
-      setError('No se pudo limpiar el historial local.');
+      setError('No se pudo limpiar el historial local. Intenta nuevamente.');
+    }
+  };
+
+  const removeHistoryItem = async (item: HistoryItem) => {
+    if (!window.confirm(`¿Quieres eliminar "${item.filename}" del historial?`)) return;
+
+    try {
+      await deleteStoredVideo(item.id);
+      setHistory((current) => current.filter((storedItem) => storedItem.id !== item.id));
+    } catch {
+      setError('No se pudo eliminar este video del historial. Intenta nuevamente.');
     }
   };
 
@@ -332,14 +369,26 @@ export default function Home() {
       .split(/[,\n]+/)
       .map((url) => url.trim())
       .filter((url) => {
-        const lower = url.toLowerCase();
-        return (
-          lower.includes('tiktok.com') ||
-          lower.includes('instagram.com') ||
-          lower.includes('facebook.com') ||
-          lower.includes('fb.watch')
-        );
+        try {
+          const hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+          return (
+            hostname === 'tiktok.com' || hostname.endsWith('.tiktok.com') ||
+            hostname === 'instagram.com' || hostname.endsWith('.instagram.com') ||
+            hostname === 'facebook.com' || hostname.endsWith('.facebook.com') ||
+            hostname === 'fb.watch'
+          );
+        } catch {
+          return false;
+        }
       })));
+  };
+
+  const shortenUrl = (url: string) => {
+    try {
+      return new URL(url).hostname.replace(/^www\./i, '');
+    } catch {
+      return url.length > 36 ? `${url.substring(0, 36)}…` : url;
+    }
   };
 
   const extractVideos = async () => {
@@ -349,16 +398,23 @@ export default function Home() {
     setSelectedIds(new Set());
     setActiveVideoId(null);
 
+    const enteredUrls = Array.from(new Set(urls
+      .split(/[,\n]+/)
+      .map((url) => url.trim())
+      .filter(Boolean)));
     const rawUrls = parseUrls(urls);
+    const invalidUrls = enteredUrls.filter((url) => !rawUrls.includes(url));
 
     if (rawUrls.length === 0) {
-      setError('Por favor ingresa al menos un enlace válido de TikTok, Instagram o Facebook.');
+      setError(invalidUrls.length > 0
+        ? 'No encontramos un enlace compatible. Usa una URL pública de TikTok, Instagram o Facebook.'
+        : 'Pega al menos un enlace para comenzar.');
       setLoading(false);
       return;
     }
 
     const fetchedVideos: VideoItem[] = [];
-    const errors: string[] = [];
+    const errors: string[] = invalidUrls.map((url) => `${shortenUrl(url)}: enlace no compatible.`);
 
     for (let i = 0; i < rawUrls.length; i++) {
       const url = rawUrls[i];
@@ -367,15 +423,15 @@ export default function Home() {
         if (res.data.playUrl) {
           fetchedVideos.push(res.data);
         } else {
-          errors.push(`No se pudo obtener: ${url.substring(0, 40)}...`);
+          errors.push(`${shortenUrl(url)}: no se encontró un video disponible.`);
         }
       } catch (requestError) {
         const apiMessage = axios.isAxiosError(requestError)
           ? requestError.response?.data?.error
           : null;
         errors.push(apiMessage
-          ? `${url.substring(0, 34)}... — ${apiMessage}`
-          : `Error: ${url.substring(0, 40)}...`);
+          ? `${shortenUrl(url)}: ${apiMessage}`
+          : `${shortenUrl(url)}: no se pudo conectar con el servicio.`);
       }
       setProgress(Math.round(((i + 1) / rawUrls.length) * 100));
     }
@@ -386,7 +442,9 @@ export default function Home() {
     }
 
     if (errors.length > 0) {
-      setError(`${errors.length} video(s) no pudieron ser procesados.`);
+      const visibleErrors = errors.slice(0, 2).join(' · ');
+      const remainingErrors = errors.length > 2 ? ` · y ${errors.length - 2} más.` : '';
+      setError(`${errors.length} enlace(s) necesitan atención: ${visibleErrors}${remainingErrors}`);
     }
 
     setLoading(false);
@@ -433,9 +491,7 @@ export default function Home() {
       });
       setPreviewUrl(URL.createObjectURL(processed.blob));
     } catch (previewProcessingError) {
-      setPreviewError(previewProcessingError instanceof Error
-        ? previewProcessingError.message
-        : 'No se pudo generar la vista previa.');
+      setPreviewError(formatProcessingError(previewProcessingError, 'No se pudo generar la vista previa. Verifica que el video siga disponible.'));
     } finally {
       setPreviewLoading(false);
       setPreviewProgress(0);
@@ -501,14 +557,7 @@ export default function Home() {
         setError(`Proceso cancelado. ${processedCount} video(s) ya estaban listos.`);
       }
     } catch (downloadError) {
-      const message = downloadError instanceof Error
-        ? downloadError.message
-        : typeof downloadError === 'string'
-          ? downloadError
-          : downloadError && typeof downloadError === 'object' && 'message' in downloadError
-            ? String(downloadError.message)
-            : 'Error al procesar el video.';
-      setError(message || 'Error al procesar el video.');
+      setError(formatProcessingError(downloadError, 'No se pudo editar uno de los videos. Verifica que siga disponible e inténtalo nuevamente.'));
     } finally {
       setDownloading(false);
       setProgress(0);
@@ -1012,7 +1061,8 @@ export default function Home() {
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.06] text-cyan-200"><History className="h-4 w-4" /></span>
               <div>
                 <p className="text-sm font-bold text-white">Historial reciente</p>
-                <p className="mt-1 text-xs text-white/35">Tus videos editados se guardan localmente en este navegador para reproducirlos, descargarlos o compartirlos.</p>
+                <p className="mt-1 text-xs leading-5 text-white/35">{history.length} video(s) · {formatFileSize(historySize)} guardados en este navegador.</p>
+                <p className="text-[11px] leading-5 text-white/25">Se conservan los {MAX_STORED_VIDEOS} más recientes y se eliminan automáticamente después de {HISTORY_RETENTION_DAYS} días.</p>
               </div>
             </div>
             <button type="button" onClick={clearHistory} className="inline-flex items-center gap-1.5 self-start text-xs font-bold text-white/45 transition hover:text-white sm:self-auto"><RotateCcw className="h-3.5 w-3.5" /> Limpiar historial</button>
@@ -1033,6 +1083,7 @@ export default function Home() {
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button type="button" onClick={() => triggerBlobDownload(item.blob, createReplayDownloadName(item.filename))} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-bold text-white/70 transition hover:bg-white/[0.12] hover:text-white"><Download className="h-3.5 w-3.5" /> Descargar</button>
                     <button type="button" onClick={() => handleShareHistory(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200/20 bg-cyan-200/[0.08] px-3 py-2 text-xs font-bold text-cyan-100 transition hover:bg-cyan-200/[0.16]"><Share2 className="h-3.5 w-3.5" /> Compartir archivo</button>
+                    <button type="button" onClick={() => removeHistoryItem(item)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-300/15 bg-red-400/[0.06] px-3 py-2 text-xs font-bold text-red-200/75 transition hover:bg-red-400/[0.14] hover:text-red-100"><Trash2 className="h-3.5 w-3.5" /> Eliminar</button>
                   </div>
 
                   <div className="mt-4 border-t border-white/[0.08] pt-3">

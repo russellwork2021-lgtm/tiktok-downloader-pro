@@ -2,11 +2,25 @@ import { NextResponse } from 'next/server';
 import { ttdl, igdl, fbdown } from 'ab-downloader';
 
 function detectPlatform(url: string): 'tiktok' | 'instagram' | 'facebook' | null {
-  const lowerUrl = url.toLowerCase();
-  if (lowerUrl.includes('tiktok.com') || lowerUrl.includes('vm.tiktok') || lowerUrl.includes('vt.tiktok')) return 'tiktok';
-  if (lowerUrl.includes('instagram.com')) return 'instagram';
-  if (lowerUrl.includes('facebook.com') || lowerUrl.includes('fb.watch')) return 'facebook';
+  let hostname: string;
+  try {
+    hostname = new URL(url).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return null;
+  }
+
+  if (hostname === 'tiktok.com' || hostname.endsWith('.tiktok.com')) return 'tiktok';
+  if (hostname === 'instagram.com' || hostname.endsWith('.instagram.com')) return 'instagram';
+  if (hostname === 'facebook.com' || hostname.endsWith('.facebook.com') || hostname === 'fb.watch') return 'facebook';
   return null;
+}
+
+function platformName(platform: 'tiktok' | 'instagram' | 'facebook') {
+  return platform[0].toUpperCase() + platform.slice(1);
+}
+
+function unavailableMessage(platform: 'tiktok' | 'instagram' | 'facebook') {
+  return `No se pudo obtener este video de ${platformName(platform)}. Verifica que el enlace sea público, siga disponible y no requiera iniciar sesión.`;
 }
 
 function generateId(): string {
@@ -25,24 +39,25 @@ export async function POST(req: Request) {
   try {
     const { url } = await req.json();
 
-    if (!url) {
-      return NextResponse.json({ error: 'URL is required' }, { status: 400 });
+    if (typeof url !== 'string' || !url.trim()) {
+      return NextResponse.json({ error: 'Pega un enlace de TikTok, Instagram o Facebook para comenzar.' }, { status: 400 });
     }
 
-    const platform = detectPlatform(url);
+    const normalizedUrl = url.trim();
+    const platform = detectPlatform(normalizedUrl);
 
     if (!platform) {
       return NextResponse.json({ 
-        error: 'URL no soportada. Usa enlaces de TikTok, Instagram o Facebook.' 
+        error: 'Enlace no compatible. Usa una URL pública de TikTok, Instagram o Facebook.'
       }, { status: 400 });
     }
 
     let result;
 
     if (platform === 'tiktok') {
-      const data = await ttdl(url);
+      const data = await ttdl(normalizedUrl);
       if (data.status === false) {
-        return NextResponse.json({ error: data.message || 'Error al descargar TikTok' }, { status: 500 });
+        return NextResponse.json({ error: unavailableMessage(platform) }, { status: 422 });
       }
       result = {
         id: generateId(),
@@ -54,9 +69,9 @@ export async function POST(req: Request) {
         duration: 0
       };
     } else if (platform === 'instagram') {
-      const data = await igdl(url);
+      const data = await igdl(normalizedUrl);
       if (!Array.isArray(data)) {
-        return NextResponse.json({ error: data.message || 'Error al descargar Instagram' }, { status: 500 });
+        return NextResponse.json({ error: unavailableMessage(platform) }, { status: 422 });
       }
       const media = data[0];
       result = {
@@ -69,9 +84,9 @@ export async function POST(req: Request) {
         duration: 0
       };
     } else if (platform === 'facebook') {
-      const data = await fbdown(url);
+      const data = await fbdown(normalizedUrl);
       if (!data.HD && !data.Normal_video) {
-        return NextResponse.json({ error: data.message || 'Error al descargar Facebook' }, { status: 500 });
+        return NextResponse.json({ error: unavailableMessage(platform) }, { status: 422 });
       }
       result = {
         id: generateId(),
@@ -85,7 +100,7 @@ export async function POST(req: Request) {
     }
 
     if (!result?.playUrl) {
-      return NextResponse.json({ error: 'No se pudo obtener el video. Intenta con otro enlace.' }, { status: 500 });
+      return NextResponse.json({ error: unavailableMessage(platform) }, { status: 422 });
     }
 
     return NextResponse.json(result);
@@ -93,7 +108,7 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error('Download API Error:', error);
     return NextResponse.json({ 
-      error: error instanceof Error ? error.message : 'Error al procesar el video. Intenta más tarde.' 
-    }, { status: 500 });
+      error: 'El servicio no pudo procesar este enlace. Comprueba que sea público e inténtalo nuevamente.'
+    }, { status: 502 });
   }
 }

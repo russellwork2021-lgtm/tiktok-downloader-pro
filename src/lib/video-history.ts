@@ -10,6 +10,8 @@ export interface StoredVideoHistoryItem {
 const DATABASE_NAME = 'downloader-pro-video-history';
 const STORE_NAME = 'videos';
 const DATABASE_VERSION = 1;
+export const MAX_STORED_VIDEOS = 8;
+export const HISTORY_RETENTION_DAYS = 30;
 
 function openHistoryDatabase(): Promise<IDBDatabase> {
   if (typeof window === 'undefined' || !('indexedDB' in window)) {
@@ -62,18 +64,56 @@ function runStoreRequest<T>(
   });
 }
 
-export async function listStoredVideos(): Promise<StoredVideoHistoryItem[]> {
+async function getAllStoredVideos(): Promise<StoredVideoHistoryItem[]> {
   const database = await openHistoryDatabase();
-  const items = await runStoreRequest(database, 'readonly', (store) => store.getAll());
+  return runStoreRequest(database, 'readonly', (store) => store.getAll());
+}
 
-  return items
-    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
-    .slice(0, 8);
+async function deleteStoredVideoIds(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+
+  const database = await openHistoryDatabase();
+  await runStoreRequest(database, 'readwrite', (store) => {
+    let lastRequest: IDBRequest<undefined> = store.delete(ids[0]);
+    ids.slice(1).forEach((id) => {
+      lastRequest = store.delete(id);
+    });
+    return lastRequest;
+  });
+}
+
+async function pruneStoredVideos(): Promise<StoredVideoHistoryItem[]> {
+  const items = await getAllStoredVideos();
+  const cutoff = Date.now() - HISTORY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const sortedItems = items.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const retainedItems = sortedItems
+    .filter((item) => {
+      const createdAt = new Date(item.createdAt).getTime();
+      return Number.isFinite(createdAt) && createdAt >= cutoff;
+    })
+    .slice(0, MAX_STORED_VIDEOS);
+  const retainedIds = new Set(retainedItems.map((item) => item.id));
+  const idsToDelete = sortedItems
+    .filter((item) => !retainedIds.has(item.id))
+    .map((item) => item.id);
+
+  await deleteStoredVideoIds(idsToDelete);
+  return retainedItems;
+}
+
+export async function listStoredVideos(): Promise<StoredVideoHistoryItem[]> {
+  return pruneStoredVideos();
+}
+
+export async function deleteStoredVideo(id: string): Promise<void> {
+  const database = await openHistoryDatabase();
+  await runStoreRequest(database, 'readwrite', (store) => store.delete(id));
 }
 
 export async function saveStoredVideo(item: StoredVideoHistoryItem): Promise<void> {
   const database = await openHistoryDatabase();
   await runStoreRequest(database, 'readwrite', (store) => store.put(item));
+  await pruneStoredVideos();
 }
 
 export async function clearStoredVideos(): Promise<void> {
