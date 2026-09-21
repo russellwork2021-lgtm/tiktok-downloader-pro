@@ -42,8 +42,14 @@ async function getFfmpeg() {
 
       const loadFfmpeg = async (baseUrl: string, multithreaded: boolean) => {
         const ffmpeg = new FFmpeg();
-        const coreURL = await toBlobURL(`${baseUrl}/ffmpeg-core.js`, 'text/javascript');
-        const wasmURL = await toBlobURL(`${baseUrl}/ffmpeg-core.wasm`, 'application/wasm');
+        const coreSourceURL = `${baseUrl}/ffmpeg-core.js`;
+        const wasmSourceURL = `${baseUrl}/ffmpeg-core.wasm`;
+        const coreURL = multithreaded
+          ? await toBlobURL(coreSourceURL, 'text/javascript')
+          : coreSourceURL;
+        const wasmURL = multithreaded
+          ? await toBlobURL(wasmSourceURL, 'application/wasm')
+          : wasmSourceURL;
         const workerURL = multithreaded
           ? await toBlobURL(`${baseUrl}/ffmpeg-core.worker.js`, 'text/javascript')
           : undefined;
