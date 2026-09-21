@@ -156,6 +156,14 @@ function formatProcessingError(error: unknown, fallback: string) {
     return 'El video requiere más memoria de la disponible en el navegador. Prueba procesarlo individualmente.';
   }
 
+  if (normalizedMessage.includes('procesador nativo') || normalizedMessage.includes('worker')) {
+    return `${message || fallback} Si el problema continúa, verifica que el procesador de video esté disponible.`;
+  }
+
+  if (normalizedMessage.includes('ocupado')) {
+    return 'El procesador está ocupado con otros videos. Espera unos segundos e inténtalo de nuevo.';
+  }
+
   return message || fallback;
 }
 
@@ -526,39 +534,44 @@ export default function Home() {
     const archive = mode === 'zip' ? new JSZip() : null;
     const downloadToken = createDownloadToken();
     let processedCount = 0;
-    let currentVideoTitle = '';
+    const failedVideos: string[] = [];
 
     try {
       for (let i = 0; i < selectedVideos.length; i++) {
         if (cancelRequestedRef.current) break;
         const video = selectedVideos[i];
-        currentVideoTitle = video.title || `video ${i + 1}`;
-        const processed = await processVideo({
-          sourceUrl: video.playUrl,
-          settings: editSettings,
-          onProgress: (videoProgress) => {
-            setProgress(Math.round(((i + videoProgress) / selectedVideos.length) * 100));
-          },
-        });
-        if (cancelRequestedRef.current) break;
+        const currentVideoTitle = video.title || `video ${i + 1}`;
 
-        const safeOutputName = createVideoDownloadName(
-          filename,
-          downloadToken,
-          i,
-          selectedVideos.length,
-        );
+        try {
+          const processed = await processVideo({
+            sourceUrl: video.playUrl,
+            settings: editSettings,
+            onProgress: (videoProgress) => {
+              setProgress(Math.round(((i + videoProgress) / selectedVideos.length) * 100));
+            },
+          });
+          if (cancelRequestedRef.current) break;
 
-        if (archive) {
-          archive.file(safeOutputName, processed.blob);
-        } else {
-          triggerBlobDownload(processed.blob, safeOutputName);
+          const safeOutputName = createVideoDownloadName(
+            filename,
+            downloadToken,
+            i,
+            selectedVideos.length,
+          );
+
+          if (archive) {
+            archive.file(safeOutputName, processed.blob);
+          } else {
+            triggerBlobDownload(processed.blob, safeOutputName);
+          }
+
+          await saveHistory(video, processed.blob, safeOutputName);
+
+          processedCount += 1;
+          setDownloadedCount(processedCount);
+        } catch (videoError) {
+          failedVideos.push(`${currentVideoTitle}: ${formatProcessingError(videoError, 'no se pudo procesar')}`);
         }
-
-        await saveHistory(video, processed.blob, safeOutputName);
-
-        processedCount += 1;
-        setDownloadedCount(processedCount);
       }
 
       if (archive && processedCount > 0 && !cancelRequestedRef.current) {
@@ -571,10 +584,18 @@ export default function Home() {
 
       if (cancelRequestedRef.current) {
         setError(`Proceso cancelado. ${processedCount} video(s) ya estaban listos.`);
+      } else if (failedVideos.length > 0) {
+        const visibleFailures = failedVideos.slice(0, 2).join(' · ');
+        const remainingFailures = failedVideos.length > 2 ? ` · y ${failedVideos.length - 2} más.` : '';
+        setError(
+          processedCount > 0
+            ? `Proceso parcial: ${processedCount} listo(s), ${failedVideos.length} con error. ${visibleFailures}${remainingFailures}`
+            : `No se pudo procesar ningún video. ${visibleFailures}${remainingFailures}`,
+        );
       }
     } catch (downloadError) {
       const detail = formatProcessingError(downloadError, 'Verifica que siga disponible e inténtalo nuevamente.');
-      setError(`No se pudo editar "${currentVideoTitle || 'uno de los videos'}". ${detail}`);
+      setError(`No se pudo completar la descarga. ${detail}`);
     } finally {
       setDownloading(false);
       setProgress(0);
