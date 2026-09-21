@@ -206,6 +206,9 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
     const renderTimeoutMs = Math.min(300_000, Math.max(180_000, 120_000 + sourceDuration * 4_000));
     const renderTimeoutMessage = 'La exportación está tardando más de lo esperado. Puedes reintentarlo con un clip más corto o menor resolución.';
     const execPromise = ffmpeg.exec([
+      '-hide_banner',
+      '-loglevel', 'error',
+      '-nostats',
       '-ss', String(trimStart),
       '-i', inputName,
       '-t', String(outputDuration),
