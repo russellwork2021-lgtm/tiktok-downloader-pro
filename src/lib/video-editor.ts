@@ -1,4 +1,5 @@
 import type { FFmpeg } from '@ffmpeg/ffmpeg';
+import { toBlobURL } from '@ffmpeg/util';
 
 export interface VideoEditSettings {
   trimStart: number;
@@ -27,6 +28,7 @@ interface ProcessedVideo {
 let ffmpegPromise: Promise<FFmpeg> | null = null;
 
 const CORE_BASE_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/umd';
+const MULTI_THREAD_CORE_BASE_URL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.10/dist/umd';
 
 function getArrayBuffer(data: Uint8Array): ArrayBuffer {
   return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
@@ -36,15 +38,33 @@ async function getFfmpeg() {
   if (!ffmpegPromise) {
     ffmpegPromise = (async () => {
       const [{ FFmpeg }] = await Promise.all([import('@ffmpeg/ffmpeg')]);
-      const ffmpeg = new FFmpeg();
+      const canUseMultithreading = window.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined';
 
-      const loadPromise = ffmpeg.load({
-        coreURL: `${CORE_BASE_URL}/ffmpeg-core.js`,
-        wasmURL: `${CORE_BASE_URL}/ffmpeg-core.wasm`,
-      });
-      await withTimeout(loadPromise, 60_000, 'FFmpeg tardó demasiado en iniciar. Recarga la página e inténtalo de nuevo.');
+      const loadFfmpeg = async (baseUrl: string, multithreaded: boolean) => {
+        const ffmpeg = new FFmpeg();
+        const coreURL = await toBlobURL(`${baseUrl}/ffmpeg-core.js`, 'text/javascript');
+        const wasmURL = await toBlobURL(`${baseUrl}/ffmpeg-core.wasm`, 'application/wasm');
+        const workerURL = multithreaded
+          ? await toBlobURL(`${baseUrl}/ffmpeg-core.worker.js`, 'text/javascript')
+          : undefined;
 
-      return ffmpeg;
+        const loadOptions = workerURL
+          ? { coreURL, wasmURL, workerURL }
+          : { coreURL, wasmURL };
+        const loadPromise = ffmpeg.load(loadOptions);
+        await withTimeout(loadPromise, 60_000, 'FFmpeg tardó demasiado en iniciar. Recarga la página e inténtalo de nuevo.');
+        return ffmpeg;
+      };
+
+      if (canUseMultithreading) {
+        try {
+          return await loadFfmpeg(MULTI_THREAD_CORE_BASE_URL, true);
+        } catch {
+          // Algunos navegadores o extensiones bloquean el worker multihilo; usamos el modo compatible.
+        }
+      }
+
+      return loadFfmpeg(CORE_BASE_URL, false);
     })().catch((error) => {
       ffmpegPromise = null;
       throw error;
