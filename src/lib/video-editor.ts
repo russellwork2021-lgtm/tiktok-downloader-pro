@@ -72,6 +72,7 @@ async function getFfmpeg() {
 
       return loadFfmpeg(CORE_BASE_URL, false);
     })().catch((error) => {
+      console.error('FFmpeg load failed', error);
       ffmpegPromise = null;
       throw error;
     });
@@ -253,6 +254,7 @@ export async function processVideo({ sourceUrl, settings, onProgress }: ProcessV
       duration: outputDuration / speed,
     };
   } catch (error) {
+    console.error('FFmpeg processing failed', error);
     if (error instanceof Error) throw error;
     const message = readErrorMessage(error);
     throw new Error(message || lastFfmpegMessage || 'FFmpeg no pudo exportar el video.');
